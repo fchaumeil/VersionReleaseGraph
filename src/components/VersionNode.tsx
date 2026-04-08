@@ -47,7 +47,17 @@ export function VersionNodeComponent({ data }: Props) {
       }}
     >
       <NodeResizer isVisible={hovered} minWidth={220} minHeight={90} lineStyle={{ borderColor: color }} />
-      <Handle type="target" position={Position.Top} />
+
+      {/* Hidden anchor handles on all 4 sides — PromotionGraph picks the closest pair per edge */}
+      <Handle id="top"    type="target" position={Position.Top}    isConnectable={false} style={{ opacity: 0 }} />
+      <Handle id="bottom" type="target" position={Position.Bottom} isConnectable={false} style={{ opacity: 0 }} />
+      <Handle id="left"   type="target" position={Position.Left}   isConnectable={false} style={{ opacity: 0 }} />
+      <Handle id="right"  type="target" position={Position.Right}  isConnectable={false} style={{ opacity: 0 }} />
+      <Handle id="top"    type="source" position={Position.Top}    isConnectable={false} style={{ opacity: 0 }} />
+      <Handle id="bottom" type="source" position={Position.Bottom} isConnectable={false} style={{ opacity: 0 }} />
+      <Handle id="left"   type="source" position={Position.Left}   isConnectable={false} style={{ opacity: 0 }} />
+      <Handle id="right"  type="source" position={Position.Right}  isConnectable={false} style={{ opacity: 0 }} />
+
       <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{version}</div>
       <span
         style={{
@@ -75,7 +85,6 @@ export function VersionNodeComponent({ data }: Props) {
           )}
         </div>
       )}
-      <Handle type="source" position={Position.Bottom} />
     </div>
   )
 }

@@ -4,7 +4,6 @@ import {
   Background,
   Controls,
   useNodesState,
-  useEdgesState,
   type Node,
   type Edge,
 } from "@xyflow/react"
@@ -18,6 +17,52 @@ const NODE_WIDTH = 240
 const NODE_HEIGHT = 120
 const X_CENTER = 300
 
+// ---------------------------------------------------------------------------
+// Closest-handle logic
+// ---------------------------------------------------------------------------
+
+type HandleId = "top" | "bottom" | "left" | "right"
+const HANDLE_IDS: HandleId[] = ["top", "bottom", "left", "right"]
+
+function handlePosition(
+  node: Node,
+  side: HandleId
+): { x: number; y: number } {
+  const w = (node.measured?.width ?? NODE_WIDTH) as number
+  const h = (node.measured?.height ?? NODE_HEIGHT) as number
+  const { x, y } = node.position
+  switch (side) {
+    case "top":    return { x: x + w / 2, y }
+    case "bottom": return { x: x + w / 2, y: y + h }
+    case "left":   return { x,             y: y + h / 2 }
+    case "right":  return { x: x + w,      y: y + h / 2 }
+  }
+}
+
+function closestPair(
+  source: Node,
+  target: Node
+): { sourceHandle: HandleId; targetHandle: HandleId } {
+  let best = Infinity
+  let bestSrc: HandleId = "bottom"
+  let bestTgt: HandleId = "top"
+
+  for (const sh of HANDLE_IDS) {
+    const sp = handlePosition(source, sh)
+    for (const th of HANDLE_IDS) {
+      const tp = handlePosition(target, th)
+      const d = Math.hypot(sp.x - tp.x, sp.y - tp.y)
+      if (d < best) { best = d; bestSrc = sh; bestTgt = th }
+    }
+  }
+
+  return { sourceHandle: bestSrc, targetHandle: bestTgt }
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 interface Props {
   nodes: VersionNode[]
 }
@@ -25,27 +70,40 @@ interface Props {
 export function PromotionGraph({ nodes: versionNodes }: Props) {
   const [selected, setSelected] = useState<VersionNode | null>(null)
 
-  const { initialNodes, initialEdges } = useMemo(() => {
-    const initialNodes: Node[] = versionNodes.map((vn, i) => ({
-      id: vn.version,
-      type: "versionNode",
-      position: { x: X_CENTER - NODE_WIDTH / 2, y: i * (NODE_HEIGHT + 40) },
-      data: { versionNode: vn, onClick: setSelected },
-      style: { width: NODE_WIDTH, height: NODE_HEIGHT },
-    }))
-
-    const initialEdges: Edge[] = versionNodes.slice(0, -1).map((vn, i) => ({
-      id: `e-${i}`,
-      source: vn.version,
-      target: versionNodes[i + 1].version,
-      type: "default",
-    }))
-
-    return { initialNodes, initialEdges }
-  }, [versionNodes])
+  const initialNodes: Node[] = useMemo(
+    () =>
+      versionNodes.map((vn, i) => ({
+        id: vn.version,
+        type: "versionNode",
+        position: { x: X_CENTER - NODE_WIDTH / 2, y: i * (NODE_HEIGHT + 40) },
+        data: { versionNode: vn, onClick: setSelected },
+        style: { width: NODE_WIDTH, height: NODE_HEIGHT },
+      })),
+    [versionNodes]
+  )
 
   const [nodes, , onNodesChange] = useNodesState(initialNodes)
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges)
+
+  // Recompute edges on every node position/size change so handles stay optimal
+  const edges: Edge[] = useMemo(() => {
+    const byId = new Map(nodes.map((n) => [n.id, n]))
+    return versionNodes.slice(0, -1).map((vn, i) => {
+      const src = byId.get(vn.version)
+      const tgt = byId.get(versionNodes[i + 1].version)
+      const { sourceHandle, targetHandle } =
+        src && tgt
+          ? closestPair(src, tgt)
+          : { sourceHandle: "bottom" as HandleId, targetHandle: "top" as HandleId }
+      return {
+        id: `e-${i}`,
+        source: vn.version,
+        target: versionNodes[i + 1].version,
+        sourceHandle,
+        targetHandle,
+        type: "default",
+      }
+    })
+  }, [nodes, versionNodes])
 
   if (versionNodes.length === 0) {
     return <p style={{ padding: "2rem", color: "#888" }}>No builds found for this client.</p>
@@ -59,7 +117,6 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
           edges={edges}
           nodeTypes={NODE_TYPES}
           onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
           fitView
         >
           <Background />
