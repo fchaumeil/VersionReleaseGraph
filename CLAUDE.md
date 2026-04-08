@@ -305,53 +305,53 @@ Add new clients here. Pipeline IDs come from Azure DevOps pipeline definition ID
 ## Epics & Delivery Plan
 
 ### EPIC 1 — Project Foundation
-- [ ] 1.1 Vite + React + TypeScript scaffold
-- [ ] 1.2 React Router with `/` and `/client/:id` routes
-- [ ] 1.3 `.env.local` wired to Vite; `.gitignore` entry confirmed
-- [ ] 1.4 `azureDevOps.ts` — auth helper + build fetch end-to-end
+- [x] 1.1 Vite + React + TypeScript scaffold
+- [x] 1.2 React Router with `/` and `/client/:id` routes
+- [x] 1.3 `.env.local` wired to Vite; `.gitignore` entry confirmed
+- [x] 1.4 `azureDevOps.ts` — auth helper + build fetch end-to-end
 
 ### EPIC 2 — Data Modeling & Transformation
-- [ ] 2.1 Define types in `types.ts`
-- [ ] 2.2 Parse semver from `buildNumber`
-- [ ] 2.3 Extract environment from `env:*` tags
-- [ ] 2.4 Extract risk flags from `risk:db` / `risk:env` tags
-- [ ] 2.5 Group builds by version
-- [ ] 2.6 Select highest environment per version
-- [ ] 2.7 Sort by semver ascending
-- [ ] 2.8 Unit tests for all transformation scenarios (see EPIC 8)
+- [x] 2.1 Define types in `types.ts`
+- [x] 2.2 Parse semver from `buildNumber`
+- [x] 2.3 Extract environment from `env:*` tags
+- [x] 2.4 Extract risk flags from `risk:db` / `risk:env` tags
+- [x] 2.5 Group builds by version
+- [x] 2.6 Select highest environment per version
+- [x] 2.7 Sort by semver ascending
+- [x] 2.8 Unit tests for all transformation scenarios (see EPIC 8)
 
 ### EPIC 3 — Home Page
-- [ ] 3.1 Client config file
-- [ ] 3.2 Tile grid with navigation
+- [x] 3.1 Client config file
+- [x] 3.2 Tile grid with navigation
 
 ### EPIC 4 — Promotion Graph UI
-- [ ] 4.1 React Flow container, vertical layout
-- [ ] 4.2 Custom `VersionNode` component
-- [ ] 4.3 Environment badge colors
-- [ ] 4.4 DB / env-var warning indicators on nodes
-- [ ] 4.5 Straight edges connecting nodes top-to-bottom
-- [ ] 4.6 Scroll support for long histories
-- [ ] 4.7 Empty state
+- [x] 4.1 React Flow container, vertical layout
+- [x] 4.2 Custom `VersionNode` component
+- [x] 4.3 Environment badge colors
+- [x] 4.4 DB / env-var warning indicators on nodes
+- [x] 4.5 Straight edges connecting nodes top-to-bottom
+- [x] 4.6 Scroll support for long histories
+- [x] 4.7 Empty state
 
 ### EPIC 5 — Build Details Panel
-- [ ] 5.1 Side panel triggered by node click
-- [ ] 5.2 Version, environment, timestamp, commit SHA
-- [ ] 5.3 Azure DevOps external link
-- [ ] 5.4 All raw tags displayed
-- [ ] 5.5 Per-environment breakdown table
+- [x] 5.1 Side panel triggered by node click
+- [x] 5.2 Version, environment, timestamp, commit SHA
+- [x] 5.3 Azure DevOps external link
+- [x] 5.4 All raw tags displayed
+- [x] 5.5 Per-environment breakdown table
 
 ### EPIC 6 — UX & Performance
 - [ ] 6.1 Loading spinner / skeleton
 - [ ] 6.2 Error boundary + user-facing error message
-- [ ] 6.3 In-memory cache in `useBuilds` (60 s TTL via `useRef` + timestamp)
+- [x] 6.3 In-memory cache in `useBuilds` (60 s TTL via `useRef` + timestamp)
 
 ### EPIC 7 — Validation
-- [ ] 7.1 Version only in dev → node shows dev
-- [ ] 7.2 Version in dev + qa → node shows qa
-- [ ] 7.3 Version in all environments → node shows prod
-- [ ] 7.4 Version with gaps (dev, prod, no qa/preprod) → node shows prod
-- [ ] 7.5 Invalid semver build number → skipped, warned in console
-- [ ] 7.6 Build with no `env:*` tag → skipped, warned in console
+- [x] 7.1 Version only in dev → node shows dev
+- [x] 7.2 Version in dev + qa → node shows qa
+- [x] 7.3 Version in all environments → node shows prod
+- [x] 7.4 Version with gaps (dev, prod, no qa/preprod) → node shows prod
+- [x] 7.5 Invalid semver build number → skipped, warned in console
+- [x] 7.6 Build with no `env:*` tag → skipped, warned in console
 - [ ] 7.7 Cross-check graph output against Azure DevOps UI
 
 ### EPIC 8 — Deployment
