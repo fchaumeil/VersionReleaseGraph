@@ -31,13 +31,14 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
       type: "versionNode",
       position: { x: X_CENTER - NODE_WIDTH / 2, y: i * (NODE_HEIGHT + 40) },
       data: { versionNode: vn, onClick: setSelected },
+      style: { width: NODE_WIDTH, height: NODE_HEIGHT },
     }))
 
     const initialEdges: Edge[] = versionNodes.slice(0, -1).map((vn, i) => ({
       id: `e-${i}`,
       source: vn.version,
       target: versionNodes[i + 1].version,
-      type: "straight",
+      type: "default",
     }))
 
     return { initialNodes, initialEdges }
