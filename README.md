@@ -4,11 +4,28 @@ An internal React dashboard that visualises, per client, the progressive promoti
 
 ---
 
+## Running without Azure credentials (mock data)
+
+The app ships with built-in mock data so you can run it locally without any Azure DevOps access.
+
+`.env.local` already has `VITE_USE_MOCK_DATA=true` set by default. Just install and start:
+
+```bash
+npm install
+npm run dev
+```
+
+Mock data lives in `src/lib/mockData.ts` and covers both pre-configured clients (Client A / Client B) with realistic multi-environment promotion scenarios, `risk:db` / `risk:env` tags, and edge cases (invalid semver, missing env tag).
+
+To switch to real Azure DevOps data, set `VITE_USE_MOCK_DATA=false` in `.env.local` and fill in the other variables (see [Configure environment variables](#2-configure-environment-variables) below).
+
+---
+
 ## Prerequisites
 
 - **Node.js** 18 or later
 - **npm** 9 or later
-- An **Azure DevOps Personal Access Token (PAT)** scoped to **Build (Read)**
+- An **Azure DevOps Personal Access Token (PAT)** scoped to **Build (Read)** *(only needed when not using mock data)*
 
 ---
 
@@ -132,7 +149,8 @@ src/
 │   └── clients.ts             Static list of clients + pipeline IDs
 ├── lib/
 │   ├── types.ts               Shared TypeScript types
-│   ├── azureDevOps.ts         Azure DevOps REST API calls
+│   ├── azureDevOps.ts         Azure DevOps REST API calls (bypassed when VITE_USE_MOCK_DATA=true)
+│   ├── mockData.ts            Built-in mock builds for local development
 │   └── transformBuilds.ts     Core promotion logic
 ├── hooks/
 │   └── useBuilds.ts           Data-fetching hook (60 s in-memory cache)
