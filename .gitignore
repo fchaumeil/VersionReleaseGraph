@@ -4,10 +4,6 @@ node_modules/
 # Build output
 dist/
 
-# Environment variables — NEVER commit
-.env.local
-.env*.local
-
 # Editor
 .vscode/
 .idea/
@@ -16,5 +12,3 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Vite
-*.local
