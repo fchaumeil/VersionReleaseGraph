@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A React-based internal tool that visualizes, per client, the progressive promotion of versioned builds across deployment environments (dev, qa, preprod, prod). It connects to Azure DevOps via a secure backend proxy and renders a linear promotion graph using React Flow.
+A React-based internal tool that visualizes, per client, the progressive promotion of versioned builds across deployment environments (dev, qa, preprod, prod). It calls the Azure DevOps REST API directly from the browser and renders a linear promotion graph using React Flow.
 
 ---
 
@@ -11,42 +11,38 @@ A React-based internal tool that visualizes, per client, the progressive promoti
 ```
 browser (React + React Flow)
         │
-        ▼
-  Express / Node backend   ←── PAT stored here only
-        │
-        ▼
+        ▼ fetch + Basic auth (PAT from env var)
   Azure DevOps REST API
 ```
 
-### Frontend
+No backend. The app is a pure static site.
+
+> **Security note:** The PAT is visible to any user who opens DevTools. This is an accepted tradeoff for an internal tool deployed on a private/corporate network. Scope the PAT to **Build (Read)** only on the relevant project to minimise blast radius.
+
+---
+
+## Tech Stack
+
 - **Vite + React + TypeScript**
 - **React Router** — routes: `/` (home), `/client/:id`
 - **React Flow** — graph rendering
 - **semver** — version sorting and validation
 
-### Backend
-- **Node / Express** (or Azure Functions for deployment)
-- Proxies all Azure DevOps calls; the PAT never reaches the browser
-- Light in-memory cache (30–60 s) per client
-
 ---
 
-## Environment Variables
+## Environment Variables (Vite)
 
-### Backend (never expose to frontend)
-```
-AZURE_DEVOPS_PAT=<personal-access-token-with-read-access-to-builds>
-AZURE_DEVOPS_ORG=<organisation-name>
-AZURE_DEVOPS_PROJECT=<project-name>
-PORT=3001
-```
+Stored in `.env.local` (git-ignored):
 
-### Frontend (Vite)
 ```
-VITE_API_BASE_URL=http://localhost:3001
+VITE_AZURE_DEVOPS_PAT=<personal-access-token-scope:Build-Read>
+VITE_AZURE_DEVOPS_ORG=<organisation-name>
+VITE_AZURE_DEVOPS_PROJECT=<project-name>
 ```
 
-No credentials belong in the frontend environment.
+The PAT is Base64-encoded at runtime and passed as `Authorization: Basic <base64(:<PAT>)>` on every Azure DevOps request. It is **never** hardcoded in source.
+
+`.env.local` must be listed in `.gitignore`. Never commit it.
 
 ---
 
@@ -55,45 +51,73 @@ No credentials belong in the frontend environment.
 ```
 /
 ├── CLAUDE.md
-├── backend/
-│   ├── src/
-│   │   ├── index.ts          # Express entry point
-│   │   ├── routes/
-│   │   │   ├── clients.ts    # GET /api/clients
-│   │   │   └── builds.ts     # GET /api/builds?clientId=xxx
-│   │   ├── services/
-│   │   │   └── azure.ts      # Azure DevOps API calls
-│   │   └── cache.ts          # Simple TTL cache
-│   ├── package.json
-│   └── tsconfig.json
-│
-└── frontend/
-    ├── src/
-    │   ├── main.tsx
-    │   ├── App.tsx
-    │   ├── pages/
-    │   │   ├── HomePage.tsx         # Client tile grid
-    │   │   └── ClientPage.tsx       # Promotion graph view
-    │   ├── components/
-    │   │   ├── ClientTile.tsx
-    │   │   ├── PromotionGraph.tsx   # React Flow wrapper
-    │   │   ├── VersionNode.tsx      # Custom React Flow node
-    │   │   └── BuildDetailsPanel.tsx
-    │   ├── hooks/
-    │   │   └── useBuilds.ts
-    │   ├── lib/
-    │   │   ├── transformBuilds.ts   # Core promotion logic
-    │   │   └── types.ts
-    │   └── config/
-    │       └── clients.ts           # Static client list
-    ├── package.json
-    ├── vite.config.ts
-    └── tsconfig.json
+├── .env.local          # git-ignored, holds PAT + org/project
+├── .gitignore
+├── index.html
+├── vite.config.ts
+├── tsconfig.json
+├── package.json
+└── src/
+    ├── main.tsx
+    ├── App.tsx
+    ├── pages/
+    │   ├── HomePage.tsx         # Client tile grid
+    │   └── ClientPage.tsx       # Promotion graph view
+    ├── components/
+    │   ├── ClientTile.tsx
+    │   ├── PromotionGraph.tsx   # React Flow wrapper
+    │   ├── VersionNode.tsx      # Custom React Flow node
+    │   └── BuildDetailsPanel.tsx
+    ├── hooks/
+    │   └── useBuilds.ts         # Fetches + transforms builds
+    ├── lib/
+    │   ├── azureDevOps.ts       # Azure DevOps REST calls
+    │   ├── transformBuilds.ts   # Core promotion logic
+    │   └── types.ts
+    └── config/
+        └── clients.ts           # Static client list
 ```
 
 ---
 
-## Core Data Types (`frontend/src/lib/types.ts`)
+## Azure DevOps API Calls (`src/lib/azureDevOps.ts`)
+
+All calls are made directly from the browser.
+
+### Auth helper
+
+```typescript
+function authHeader(): string {
+  const pat = import.meta.env.VITE_AZURE_DEVOPS_PAT
+  return "Basic " + btoa(":" + pat)
+}
+```
+
+### Fetch builds for a pipeline
+
+```
+GET https://dev.azure.com/{org}/{project}/_apis/build/builds
+  ?definitions={pipelineId}
+  &$top=200
+  &api-version=7.1
+Headers:
+  Authorization: Basic <base64(:<PAT>)>
+```
+
+### Fetch tags for a build
+
+Azure DevOps does not always return tags in the builds list response. If tags are missing, fetch them separately:
+
+```
+GET https://dev.azure.com/{org}/{project}/_apis/build/builds/{buildId}/tags
+  ?api-version=7.1
+```
+
+Fetch all pipelines for a client in parallel (`Promise.all`), then merge the results before transforming.
+
+---
+
+## Core Data Types (`src/lib/types.ts`)
 
 ```typescript
 export type Environment = "dev" | "qa" | "preprod" | "prod"
@@ -133,7 +157,7 @@ export type Client = {
 
 ---
 
-## Promotion Logic (`frontend/src/lib/transformBuilds.ts`)
+## Promotion Logic (`src/lib/transformBuilds.ts`)
 
 This is the critical transformation that converts raw Azure build data into the visual graph input.
 
@@ -167,7 +191,7 @@ Raw builds:
 1.3.0 dev
 ```
 
-Output graph (top = highest/oldest, bottom = lowest/newest):
+Output graph (top = oldest/highest-promoted, bottom = newest/lowest):
 ```
 [1.0.0]  prod   ← green
    |
@@ -180,47 +204,19 @@ Output graph (top = highest/oldest, bottom = lowest/newest):
 
 ---
 
-## Backend API
-
-### `GET /api/clients`
-Returns the static client list (sourced from `clients.ts` config on the backend).
-
-```json
-[
-  { "id": "client-a", "name": "Client A", "azurePipelineIds": [42] }
-]
-```
-
-### `GET /api/builds?clientId=<id>`
-1. Look up the client's `azurePipelineIds`.
-2. For each pipeline, call Azure DevOps:
-   ```
-   GET https://dev.azure.com/{org}/{project}/_apis/build/builds
-     ?definitions={pipelineId}
-     &$top=200
-     &api-version=7.1
-   ```
-   Auth: `Basic base64(:<PAT>)`
-3. Map each Azure build to the internal `Build` type.
-4. Return the array; transformation happens on the frontend.
-
-Cache responses with a TTL of 60 seconds keyed by `clientId`.
-
----
-
 ## Azure DevOps Build Field Mapping
 
-| Internal field  | Azure DevOps field                        |
-|-----------------|-------------------------------------------|
-| `id`            | `build.id.toString()`                     |
-| `version`       | `semver.valid(build.buildNumber)`         |
-| `environment`   | tag matching `/^env:(dev|qa|preprod|prod)/` |
-| `timestamp`     | `build.finishTime` (ISO string)           |
-| `buildUrl`      | `build._links.web.href`                   |
-| `commitSha`     | `build.sourceVersion` (first 7 chars)     |
-| `tags`          | `build.tags` (string[])                   |
-| `hasDbChanges`  | `build.tags.includes("risk:db")`          |
-| `hasEnvChanges` | `build.tags.includes("risk:env")`         |
+| Internal field  | Azure DevOps field                          |
+|-----------------|---------------------------------------------|
+| `id`            | `build.id.toString()`                       |
+| `version`       | `semver.valid(build.buildNumber)`           |
+| `environment`   | tag matching `/^env:(dev\|qa\|preprod\|prod)/` |
+| `timestamp`     | `build.finishTime` (ISO string)             |
+| `buildUrl`      | `build._links.web.href`                     |
+| `commitSha`     | `build.sourceVersion` (first 7 chars)       |
+| `tags`          | `build.tags` (string[])                     |
+| `hasDbChanges`  | `build.tags.includes("risk:db")`            |
+| `hasEnvChanges` | `build.tags.includes("risk:env")`           |
 
 Builds without a valid `env:*` tag or without a parseable semver `buildNumber` are silently skipped with a `console.warn`.
 
@@ -283,7 +279,7 @@ Displays:
 
 ---
 
-## Client Configuration (`frontend/src/config/clients.ts`)
+## Client Configuration (`src/config/clients.ts`)
 
 ```typescript
 import type { Client } from "../lib/types"
@@ -309,10 +305,10 @@ Add new clients here. Pipeline IDs come from Azure DevOps pipeline definition ID
 ## Epics & Delivery Plan
 
 ### EPIC 1 — Project Foundation
-- [ ] 1.1 Vite + React + TypeScript frontend scaffold
-- [ ] 1.2 Express backend with `/api/clients` and `/api/builds` routes
-- [ ] 1.3 PAT stored only in backend `.env`; frontend never sees it
-- [ ] 1.4 Azure DevOps build fetch wired end-to-end
+- [ ] 1.1 Vite + React + TypeScript scaffold
+- [ ] 1.2 React Router with `/` and `/client/:id` routes
+- [ ] 1.3 `.env.local` wired to Vite; `.gitignore` entry confirmed
+- [ ] 1.4 `azureDevOps.ts` — auth helper + build fetch end-to-end
 
 ### EPIC 2 — Data Modeling & Transformation
 - [ ] 2.1 Define types in `types.ts`
@@ -344,36 +340,32 @@ Add new clients here. Pipeline IDs come from Azure DevOps pipeline definition ID
 - [ ] 5.4 All raw tags displayed
 - [ ] 5.5 Per-environment breakdown table
 
-### EPIC 6 — Security
-- [ ] 6.1 PAT never in frontend bundle or network response
-- [ ] 6.2 CORS restricted to frontend origin
-- [ ] 6.3 (Optional) Basic auth or IP allowlist on backend
+### EPIC 6 — UX & Performance
+- [ ] 6.1 Loading spinner / skeleton
+- [ ] 6.2 Error boundary + user-facing error message
+- [ ] 6.3 In-memory cache in `useBuilds` (60 s TTL via `useRef` + timestamp)
 
-### EPIC 7 — UX & Performance
-- [ ] 7.1 Loading spinner / skeleton
-- [ ] 7.2 Error boundary + user-facing error message
-- [ ] 7.3 Backend cache (60 s TTL)
+### EPIC 7 — Validation
+- [ ] 7.1 Version only in dev → node shows dev
+- [ ] 7.2 Version in dev + qa → node shows qa
+- [ ] 7.3 Version in all environments → node shows prod
+- [ ] 7.4 Version with gaps (dev, prod, no qa/preprod) → node shows prod
+- [ ] 7.5 Invalid semver build number → skipped, warned in console
+- [ ] 7.6 Build with no `env:*` tag → skipped, warned in console
+- [ ] 7.7 Cross-check graph output against Azure DevOps UI
 
-### EPIC 8 — Validation
-- [ ] 8.1 Version only in dev → node shows dev
-- [ ] 8.2 Version in dev + qa → node shows qa
-- [ ] 8.3 Version in all environments → node shows prod
-- [ ] 8.4 Version with gaps (dev, prod, no qa/preprod) → node shows prod
-- [ ] 8.5 Invalid semver build number → skipped, warned in console
-- [ ] 8.6 Build with no `env:*` tag → skipped, warned in console
-- [ ] 8.7 Cross-check graph output against Azure DevOps UI
-
-### EPIC 9 — Deployment
-- [ ] 9.1 Backend deployed (Azure Functions or App Service)
-- [ ] 9.2 Frontend deployed (Static Web Apps or equivalent)
-- [ ] 9.3 Environment variables configured in hosting platform
+### EPIC 8 — Deployment
+- [ ] 8.1 Build static output (`vite build`)
+- [ ] 8.2 Deploy to static hosting (Azure Static Web Apps, GitHub Pages, etc.)
+- [ ] 8.3 Set env vars in hosting platform (or bake into build at deploy time)
 
 ---
 
 ## Key Constraints & Non-Goals
 
+- **No backend**: pure static React app; all API calls go directly from the browser to Azure DevOps.
+- **PAT security**: scope to `Build (Read)` only; deploy only on private/internal networks.
 - **Semver only**: build numbers that are not valid semver are ignored.
 - **Tag-driven**: environment detection is entirely tag-based (`env:<name>`). No heuristics from pipeline names.
 - **One node per version**: the graph never shows the same version twice.
 - **No write operations**: this is a read-only dashboard; it never triggers builds.
-- **No auth in MVP**: basic access control is optional for the first release.
