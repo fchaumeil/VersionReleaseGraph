@@ -3,6 +3,8 @@ import {
   ReactFlow,
   Background,
   Controls,
+  useNodesState,
+  useEdgesState,
   type Node,
   type Edge,
 } from "@xyflow/react"
@@ -23,23 +25,26 @@ interface Props {
 export function PromotionGraph({ nodes: versionNodes }: Props) {
   const [selected, setSelected] = useState<VersionNode | null>(null)
 
-  const { flowNodes, flowEdges } = useMemo(() => {
-    const flowNodes: Node[] = versionNodes.map((vn, i) => ({
+  const { initialNodes, initialEdges } = useMemo(() => {
+    const initialNodes: Node[] = versionNodes.map((vn, i) => ({
       id: vn.version,
       type: "versionNode",
       position: { x: X_CENTER - NODE_WIDTH / 2, y: i * (NODE_HEIGHT + 40) },
       data: { versionNode: vn, onClick: setSelected },
     }))
 
-    const flowEdges: Edge[] = versionNodes.slice(0, -1).map((vn, i) => ({
+    const initialEdges: Edge[] = versionNodes.slice(0, -1).map((vn, i) => ({
       id: `e-${i}`,
       source: vn.version,
       target: versionNodes[i + 1].version,
       type: "straight",
     }))
 
-    return { flowNodes, flowEdges }
+    return { initialNodes, initialEdges }
   }, [versionNodes])
+
+  const [nodes, , onNodesChange] = useNodesState(initialNodes)
+  const [edges, , onEdgesChange] = useEdgesState(initialEdges)
 
   if (versionNodes.length === 0) {
     return <p style={{ padding: "2rem", color: "#888" }}>No builds found for this client.</p>
@@ -48,7 +53,14 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
   return (
     <>
       <div style={{ width: "100%", height: "100vh" }}>
-        <ReactFlow nodes={flowNodes} edges={flowEdges} nodeTypes={NODE_TYPES} fitView>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={NODE_TYPES}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          fitView
+        >
           <Background />
           <Controls />
         </ReactFlow>
