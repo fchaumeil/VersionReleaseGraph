@@ -9,17 +9,27 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-slot": "^1.2.4",
     "@xyflow/react": "^12.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.7.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.0",
-    "semver": "^7.6.3"
+    "semver": "^7.6.3",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@types/node": "^25.5.2",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@types/semver": "^7.5.8",
     "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.9",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.5.3",
     "vite": "^5.4.2"
   }

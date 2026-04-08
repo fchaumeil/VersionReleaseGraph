@@ -1,3 +1,7 @@
+import { MOCK_PIPELINE_MAP } from "./mockData"
+
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA === "true"
+
 const ORG = import.meta.env.VITE_AZURE_DEVOPS_ORG
 const PROJECT = import.meta.env.VITE_AZURE_DEVOPS_PROJECT
 const BASE = `https://dev.azure.com/${ORG}/${PROJECT}/_apis`
@@ -15,7 +19,7 @@ async function apiFetch<T>(url: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
-interface AzureBuild {
+export interface AzureBuild {
   id: number
   buildNumber: string
   finishTime: string
@@ -33,8 +37,13 @@ interface AzureTagsResponse {
 }
 
 export async function fetchBuildsForPipeline(pipelineId: number): Promise<AzureBuild[]> {
-  const url =
-    `${BASE}/build/builds?definitions=${pipelineId}&$top=200&api-version=7.1`
+  if (USE_MOCK) {
+    const builds = MOCK_PIPELINE_MAP[pipelineId]
+    if (!builds) console.warn(`Mock: no data for pipeline ${pipelineId}`)
+    return Promise.resolve(builds ?? [])
+  }
+
+  const url = `${BASE}/build/builds?definitions=${pipelineId}&$top=200&api-version=7.1`
   const data = await apiFetch<AzureBuildsResponse>(url)
   const builds = data.value
 
@@ -52,5 +61,3 @@ export async function fetchBuildsForPipeline(pipelineId: number): Promise<AzureB
 
   return builds
 }
-
-export { type AzureBuild }
