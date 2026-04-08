@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Handle, Position, NodeResizer } from "@xyflow/react"
 import type { VersionNode as VersionNodeType } from "../lib/types"
 
@@ -19,6 +20,7 @@ export function VersionNodeComponent({ data }: Props) {
   const { versionNode, onClick } = data
   const { version, highestEnv, build } = versionNode
   const color = ENV_COLORS[highestEnv] ?? "#6b7280"
+  const [hovered, setHovered] = useState(false)
   const date = new Date(build.timestamp).toLocaleString("en-GB", {
     year: "numeric",
     month: "2-digit",
@@ -30,6 +32,8 @@ export function VersionNodeComponent({ data }: Props) {
   return (
     <div
       onClick={() => onClick(versionNode)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         padding: "0.75rem 1rem",
         borderRadius: 8,
@@ -42,7 +46,7 @@ export function VersionNodeComponent({ data }: Props) {
         userSelect: "none",
       }}
     >
-      <NodeResizer minWidth={220} minHeight={90} lineStyle={{ borderColor: color }} />
+      <NodeResizer isVisible={hovered} minWidth={220} minHeight={90} lineStyle={{ borderColor: color }} />
       <Handle type="target" position={Position.Top} />
       <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{version}</div>
       <span
