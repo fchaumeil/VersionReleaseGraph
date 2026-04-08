@@ -1,4 +1,4 @@
-import { Handle, Position } from "@xyflow/react"
+import { Handle, Position, NodeResizer } from "@xyflow/react"
 import type { VersionNode as VersionNodeType } from "../lib/types"
 
 const ENV_COLORS: Record<string, string> = {
@@ -36,10 +36,13 @@ export function VersionNodeComponent({ data }: Props) {
         border: `2px solid ${color}`,
         background: "#fff",
         cursor: "pointer",
-        minWidth: 220,
+        width: "100%",
+        height: "100%",
+        boxSizing: "border-box",
         userSelect: "none",
       }}
     >
+      <NodeResizer minWidth={220} minHeight={90} lineStyle={{ borderColor: color }} />
       <Handle type="target" position={Position.Top} />
       <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{version}</div>
       <span
