@@ -13,11 +13,19 @@ interface Props {
   data: {
     versionNode: VersionNodeType
     onClick: (node: VersionNodeType) => void
+    activeHandles: Set<string>
   }
 }
 
+const SIDES = [
+  { id: "top",    position: Position.Top    },
+  { id: "bottom", position: Position.Bottom },
+  { id: "left",   position: Position.Left   },
+  { id: "right",  position: Position.Right  },
+] as const
+
 export function VersionNodeComponent({ data }: Props) {
-  const { versionNode, onClick } = data
+  const { versionNode, onClick, activeHandles } = data
   const { version, highestEnv, build } = versionNode
   const color = ENV_COLORS[highestEnv] ?? "#6b7280"
   const [hovered, setHovered] = useState(false)
@@ -48,15 +56,19 @@ export function VersionNodeComponent({ data }: Props) {
     >
       <NodeResizer isVisible={hovered} minWidth={220} minHeight={90} lineStyle={{ borderColor: color }} />
 
-      {/* Hidden anchor handles on all 4 sides — PromotionGraph picks the closest pair per edge */}
-      <Handle id="top"    type="target" position={Position.Top}    isConnectable={false} style={{ opacity: 0 }} />
-      <Handle id="bottom" type="target" position={Position.Bottom} isConnectable={false} style={{ opacity: 0 }} />
-      <Handle id="left"   type="target" position={Position.Left}   isConnectable={false} style={{ opacity: 0 }} />
-      <Handle id="right"  type="target" position={Position.Right}  isConnectable={false} style={{ opacity: 0 }} />
-      <Handle id="top"    type="source" position={Position.Top}    isConnectable={false} style={{ opacity: 0 }} />
-      <Handle id="bottom" type="source" position={Position.Bottom} isConnectable={false} style={{ opacity: 0 }} />
-      <Handle id="left"   type="source" position={Position.Left}   isConnectable={false} style={{ opacity: 0 }} />
-      <Handle id="right"  type="source" position={Position.Right}  isConnectable={false} style={{ opacity: 0 }} />
+      {/* Anchor handles — visible (env-coloured dot) when used by an edge, hidden otherwise */}
+      {SIDES.map(({ id, position }) => {
+        const active = activeHandles?.has(id)
+        const handleStyle = active
+          ? { background: color, width: 10, height: 10, border: `2px solid #fff`, opacity: 1 }
+          : { opacity: 0 as const }
+        return (
+          <>
+            <Handle key={`t-${id}`} id={id} type="target" position={position} isConnectable={false} style={handleStyle} />
+            <Handle key={`s-${id}`} id={id} type="source" position={position} isConnectable={false} style={handleStyle} />
+          </>
+        )
+      })}
 
       <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{version}</div>
       <span
