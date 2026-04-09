@@ -62,18 +62,17 @@ describe("VersionNodeComponent", () => {
   })
 
   // Epic 4.3 — environment badge colours
-  // jsdom converts hex to rgb, so we match against rgb equivalents
   it.each([
-    ["dev", "rgb(107, 114, 128)"],
-    ["qa", "rgb(59, 130, 246)"],
-    ["preprod", "rgb(139, 92, 246)"],
-    ["prod", "rgb(34, 197, 94)"],
-  ] as const)("applies correct border colour for %s environment", (env, rgb) => {
+    ["dev", "#6b7280"],
+    ["qa", "#3b82f6"],
+    ["preprod", "#8b5cf6"],
+    ["prod", "#22c55e"],
+  ] as const)("applies correct border colour for %s environment", (env, hex) => {
     const node = makeNode({ environment: env })
     node.highestEnv = env
     const { container } = renderNode(node)
     const wrapper = container.firstChild as HTMLElement
-    expect(wrapper.style.border).toContain(rgb)
+    expect(wrapper.style.border).toContain(hex)
   })
 
   // Epic 4.4 — warning indicators

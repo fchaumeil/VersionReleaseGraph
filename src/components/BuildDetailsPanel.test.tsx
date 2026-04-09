@@ -52,7 +52,7 @@ function makeNode(overrides: Partial<VersionNode> = {}): VersionNode {
 
 describe("BuildDetailsPanel", () => {
   beforeEach(() => {
-    Object.assign(navigator, { clipboard: { writeText: vi.fn() } })
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: vi.fn() } })
   })
 
   // Epic 5.1
