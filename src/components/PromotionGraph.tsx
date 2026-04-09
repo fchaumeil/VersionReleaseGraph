@@ -24,10 +24,7 @@ const X_CENTER = 300
 type HandleId = "top" | "bottom" | "left" | "right"
 const HANDLE_IDS: HandleId[] = ["top", "bottom", "left", "right"]
 
-function handlePosition(
-  node: Node,
-  side: HandleId
-): { x: number; y: number } {
+function handlePosition(node: Node, side: HandleId): { x: number; y: number } {
   const w = (node.measured?.width ?? NODE_WIDTH) as number
   const h = (node.measured?.height ?? NODE_HEIGHT) as number
   const { x, y } = node.position
@@ -76,7 +73,7 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
         id: vn.version,
         type: "versionNode",
         position: { x: X_CENTER - NODE_WIDTH / 2, y: i * (NODE_HEIGHT + 40) },
-        data: { versionNode: vn, onClick: setSelected },
+        data: { versionNode: vn, onClick: setSelected, activeHandles: new Set<string>() },
         style: { width: NODE_WIDTH, height: NODE_HEIGHT },
       })),
     [versionNodes]
@@ -84,7 +81,7 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
 
   const [nodes, , onNodesChange] = useNodesState(initialNodes)
 
-  // Recompute edges on every node position/size change so handles stay optimal
+  // Step 1: compute edges + which handles they use
   const edges: Edge[] = useMemo(() => {
     const byId = new Map(nodes.map((n) => [n.id, n]))
     return versionNodes.slice(0, -1).map((vn, i) => {
@@ -105,6 +102,35 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
     })
   }, [nodes, versionNodes])
 
+  // Step 2: map each node → which of its handles are in use
+  const activeHandlesMap = useMemo(() => {
+    const map = new Map<string, Set<string>>()
+    for (const edge of edges) {
+      if (edge.sourceHandle) {
+        if (!map.has(edge.source)) map.set(edge.source, new Set())
+        map.get(edge.source)!.add(edge.sourceHandle)
+      }
+      if (edge.targetHandle) {
+        if (!map.has(edge.target)) map.set(edge.target, new Set())
+        map.get(edge.target)!.add(edge.targetHandle)
+      }
+    }
+    return map
+  }, [edges])
+
+  // Step 3: enrich nodes with active handle info for rendering
+  const enrichedNodes = useMemo(
+    () =>
+      nodes.map((n) => ({
+        ...n,
+        data: {
+          ...n.data,
+          activeHandles: activeHandlesMap.get(n.id) ?? new Set<string>(),
+        },
+      })),
+    [nodes, activeHandlesMap]
+  )
+
   if (versionNodes.length === 0) {
     return <p style={{ padding: "2rem", color: "#888" }}>No builds found for this client.</p>
   }
@@ -113,7 +139,7 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
     <>
       <div style={{ width: "100%", height: "100vh" }}>
         <ReactFlow
-          nodes={nodes}
+          nodes={enrichedNodes}
           edges={edges}
           nodeTypes={NODE_TYPES}
           onNodesChange={onNodesChange}
