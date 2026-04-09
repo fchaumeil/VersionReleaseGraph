@@ -54,7 +54,7 @@ export function VersionNodeComponent({ data }: Props) {
         userSelect: "none",
       }}
     >
-      <NodeResizer isVisible={hovered} minWidth={220} minHeight={90} lineStyle={{ borderColor: color }} />
+      <NodeResizer isVisible={hovered} minWidth={220} minHeight={100} lineStyle={{ borderColor: color }} />
 
       {/* Anchor handles — visible (env-coloured dot) when used by an edge, hidden otherwise */}
       {SIDES.map(({ id, position }) => {
