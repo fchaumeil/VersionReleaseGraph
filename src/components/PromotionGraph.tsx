@@ -143,6 +143,8 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
           edges={edges}
           nodeTypes={NODE_TYPES}
           onNodesChange={onNodesChange}
+          snapToGrid
+          snapGrid={[20, 20]}
           fitView
         >
           <Background />
