@@ -9,8 +9,11 @@ import type { VersionNode } from "../lib/types"
 // Epic 4.4 — DB / env-var warning indicators
 
 vi.mock("@xyflow/react", () => ({
-  Handle: ({ type }: { type: string }) => <div data-testid={`handle-${type}`} />,
-  Position: { Top: "top", Bottom: "bottom" },
+  Handle: ({ type, id }: { type: string; id: string }) => (
+    <div data-testid={`handle-${type}-${id}`} />
+  ),
+  NodeResizer: () => null,
+  Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
 }))
 
 function makeNode(overrides: Partial<VersionNode["build"]> = {}): VersionNode {
@@ -35,7 +38,9 @@ function makeNode(overrides: Partial<VersionNode["build"]> = {}): VersionNode {
 }
 
 function renderNode(node: VersionNode, onClick = vi.fn()) {
-  return render(<VersionNodeComponent data={{ versionNode: node, onClick }} />)
+  return render(
+    <VersionNodeComponent data={{ versionNode: node, onClick, activeHandles: new Set<string>() }} />
+  )
 }
 
 describe("VersionNodeComponent", () => {
@@ -49,10 +54,9 @@ describe("VersionNodeComponent", () => {
     expect(screen.getByText("qa")).toBeInTheDocument()
   })
 
-  it("renders target and source handles", () => {
+  it("renders target and source handles for all 4 sides (8 total)", () => {
     renderNode(makeNode())
-    expect(screen.getByTestId("handle-target")).toBeInTheDocument()
-    expect(screen.getByTestId("handle-source")).toBeInTheDocument()
+    expect(screen.getAllByTestId(/^handle-(target|source)-(top|bottom|left|right)$/)).toHaveLength(8)
   })
 
   it("renders the build timestamp", () => {

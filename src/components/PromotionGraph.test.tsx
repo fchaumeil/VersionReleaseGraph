@@ -1,3 +1,4 @@
+import React from "react"
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, act } from "@testing-library/react"
 import { PromotionGraph } from "./PromotionGraph"
@@ -15,15 +16,28 @@ import type { Node, Edge } from "@xyflow/react"
 
 const capturedProps = vi.hoisted(() => ({ nodes: [] as Node[], edges: [] as Edge[] }))
 
-vi.mock("@xyflow/react", () => ({
-  ReactFlow: (props: { nodes: Node[]; edges: Edge[] }) => {
-    capturedProps.nodes = props.nodes
-    capturedProps.edges = props.edges
-    return <div data-testid="react-flow" />
-  },
-  Background: () => null,
-  Controls: () => null,
-}))
+vi.mock("@xyflow/react", () => {
+  const Position = { Top: "top", Bottom: "bottom", Left: "left", Right: "right" }
+
+  function useNodesState(init: Node[]) {
+    const [nodes, setNodes] = React.useState(init)
+    return [nodes, setNodes, vi.fn()] as const
+  }
+
+  return {
+    ReactFlow: (props: { nodes: Node[]; edges: Edge[] }) => {
+      capturedProps.nodes = props.nodes
+      capturedProps.edges = props.edges
+      return <div data-testid="react-flow" />
+    },
+    Background: () => null,
+    Controls: () => null,
+    Handle: () => null,
+    NodeResizer: () => null,
+    Position,
+    useNodesState,
+  }
+})
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -108,10 +122,10 @@ describe("PromotionGraph", () => {
     expect(capturedProps.edges[1].target).toBe("1.2.0")
   })
 
-  it("uses straight edge type", () => {
+  it("uses bezier (default) edge type", () => {
     render(<PromotionGraph nodes={THREE_NODES} />)
     for (const edge of capturedProps.edges) {
-      expect(edge.type).toBe("straight")
+      expect(edge.type).toBe("default")
     }
   })
 
