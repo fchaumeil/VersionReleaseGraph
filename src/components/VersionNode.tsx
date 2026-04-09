@@ -1,4 +1,5 @@
-import { Handle, Position } from "@xyflow/react"
+import { useState } from "react"
+import { Handle, Position, NodeResizer } from "@xyflow/react"
 import type { VersionNode as VersionNodeType } from "../lib/types"
 
 const ENV_COLORS: Record<string, string> = {
@@ -12,13 +13,22 @@ interface Props {
   data: {
     versionNode: VersionNodeType
     onClick: (node: VersionNodeType) => void
+    activeHandles: Set<string>
   }
 }
 
+const SIDES = [
+  { id: "top",    position: Position.Top    },
+  { id: "bottom", position: Position.Bottom },
+  { id: "left",   position: Position.Left   },
+  { id: "right",  position: Position.Right  },
+] as const
+
 export function VersionNodeComponent({ data }: Props) {
-  const { versionNode, onClick } = data
+  const { versionNode, onClick, activeHandles } = data
   const { version, highestEnv, build } = versionNode
   const color = ENV_COLORS[highestEnv] ?? "#6b7280"
+  const [hovered, setHovered] = useState(false)
   const date = new Date(build.timestamp).toLocaleString("en-GB", {
     year: "numeric",
     month: "2-digit",
@@ -29,18 +39,37 @@ export function VersionNodeComponent({ data }: Props) {
 
   return (
     <div
-      onClick={() => onClick(versionNode)}
+      onClick={(e) => { if (!e.ctrlKey && !e.metaKey) onClick(versionNode) }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         padding: "0.75rem 1rem",
         borderRadius: 8,
         border: `2px solid ${color}`,
         background: "#fff",
         cursor: "pointer",
-        minWidth: 220,
+        width: "100%",
+        height: "100%",
+        boxSizing: "border-box",
         userSelect: "none",
       }}
     >
-      <Handle type="target" position={Position.Top} />
+      <NodeResizer isVisible={hovered} minWidth={220} minHeight={100} lineStyle={{ borderColor: color }} />
+
+      {/* Anchor handles — visible (env-coloured dot) when used by an edge, hidden otherwise */}
+      {SIDES.map(({ id, position }) => {
+        const active = activeHandles?.has(id)
+        const handleStyle = active
+          ? { background: color, width: 10, height: 10, border: `2px solid #fff`, opacity: 1 }
+          : { opacity: 0 as const }
+        return (
+          <>
+            <Handle key={`t-${id}`} id={id} type="target" position={position} isConnectable={false} style={handleStyle} />
+            <Handle key={`s-${id}`} id={id} type="source" position={position} isConnectable={false} style={handleStyle} />
+          </>
+        )
+      })}
+
       <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{version}</div>
       <span
         style={{
@@ -68,7 +97,6 @@ export function VersionNodeComponent({ data }: Props) {
           )}
         </div>
       )}
-      <Handle type="source" position={Position.Bottom} />
     </div>
   )
 }
