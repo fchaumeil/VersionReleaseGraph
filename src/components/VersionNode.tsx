@@ -39,7 +39,7 @@ export function VersionNodeComponent({ data }: Props) {
 
   return (
     <div
-      onClick={() => onClick(versionNode)}
+      onClick={(e) => { if (!e.ctrlKey && !e.metaKey) onClick(versionNode) }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

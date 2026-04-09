@@ -145,6 +145,11 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
           onNodesChange={onNodesChange}
           snapToGrid
           snapGrid={[20, 20]}
+          selectionOnDrag
+          panOnDrag={[1, 2]}
+          panOnScroll
+          multiSelectionKeyCode={["Control", "Meta"]}
+          onSelectionChange={({ nodes: sel }) => { if (sel.length > 1) setSelected(null) }}
           fitView
         >
           <Background />
