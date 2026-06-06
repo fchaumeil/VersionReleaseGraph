@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, useEffect } from "react"
 import {
   ReactFlow,
   Background,
@@ -134,7 +134,10 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
     [allVersionNodes, manualVersions]
   )
 
-  const [nodes, , onNodesChange] = useNodesState(initialNodes)
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+
+  // Sync ReactFlow node list whenever the source version data changes
+  useEffect(() => { setNodes(initialNodes) }, [allVersionNodes]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Step 1: compute edges + which handles they use
   const edges: Edge[] = useMemo(() => {

@@ -60,6 +60,8 @@ export function AddNodeModal({ onAdd, onClose }: Props) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
+        role="dialog"
+        aria-label="Add missing node"
         style={{
           background: "#fff",
           borderRadius: 12,
