@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import {
   ReactFlow,
   Background,
@@ -8,9 +8,12 @@ import {
   type Edge,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
+import * as semver from "semver"
 import { VersionNodeComponent } from "./VersionNode"
 import { BuildDetailsPanel } from "./BuildDetailsPanel"
+import { AddNodeModal } from "./AddNodeModal"
 import type { VersionNode } from "../lib/types"
+import { ENV_PRIORITY } from "../lib/types"
 
 const NODE_TYPES = { versionNode: VersionNodeComponent }
 const NODE_WIDTH = 240
@@ -57,6 +60,36 @@ function closestPair(
 }
 
 // ---------------------------------------------------------------------------
+// Merge helper: combine real + manual nodes, keep highest env per version
+// ---------------------------------------------------------------------------
+
+function mergeNodes(real: VersionNode[], manual: VersionNode[]): VersionNode[] {
+  const byVersion = new Map<string, { node: VersionNode; isManual: boolean }>()
+
+  for (const vn of real) {
+    byVersion.set(vn.version, { node: vn, isManual: false })
+  }
+
+  for (const vn of manual) {
+    const existing = byVersion.get(vn.version)
+    if (!existing) {
+      byVersion.set(vn.version, { node: vn, isManual: true })
+    } else {
+      // Keep higher env; if manual env is higher, it overrides
+      const merged: VersionNode =
+        ENV_PRIORITY[vn.highestEnv] > ENV_PRIORITY[existing.node.highestEnv]
+          ? { ...vn, allBuilds: [...existing.node.allBuilds, ...vn.allBuilds] }
+          : { ...existing.node, allBuilds: [...existing.node.allBuilds, ...vn.allBuilds] }
+      byVersion.set(vn.version, { node: merged, isManual: existing.isManual })
+    }
+  }
+
+  return [...byVersion.values()]
+    .sort((a, b) => semver.compare(a.node.version, b.node.version))
+    .map(({ node }) => node)
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -66,17 +99,39 @@ interface Props {
 
 export function PromotionGraph({ nodes: versionNodes }: Props) {
   const [selected, setSelected] = useState<VersionNode | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [manualNodes, setManualNodes] = useState<VersionNode[]>([])
+
+  const handleAddNode = useCallback((newNode: VersionNode) => {
+    setManualNodes((prev) => [...prev, newNode])
+  }, [])
+
+  // Set of versions that were added manually (used to mark nodes visually)
+  const manualVersions = useMemo(
+    () => new Set(manualNodes.map((n) => n.version)),
+    [manualNodes]
+  )
+
+  const allVersionNodes = useMemo(
+    () => mergeNodes(versionNodes, manualNodes),
+    [versionNodes, manualNodes]
+  )
 
   const initialNodes: Node[] = useMemo(
     () =>
-      versionNodes.map((vn, i) => ({
+      allVersionNodes.map((vn, i) => ({
         id: vn.version,
         type: "versionNode",
         position: { x: X_CENTER - NODE_WIDTH / 2, y: i * (NODE_HEIGHT + 40) },
-        data: { versionNode: vn, onClick: setSelected, activeHandles: new Set<string>() },
+        data: {
+          versionNode: vn,
+          onClick: setSelected,
+          activeHandles: new Set<string>(),
+          isManual: manualVersions.has(vn.version),
+        },
         style: { width: NODE_WIDTH, height: NODE_HEIGHT },
       })),
-    [versionNodes]
+    [allVersionNodes, manualVersions]
   )
 
   const [nodes, , onNodesChange] = useNodesState(initialNodes)
@@ -84,9 +139,9 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
   // Step 1: compute edges + which handles they use
   const edges: Edge[] = useMemo(() => {
     const byId = new Map(nodes.map((n) => [n.id, n]))
-    return versionNodes.slice(0, -1).map((vn, i) => {
+    return allVersionNodes.slice(0, -1).map((vn, i) => {
       const src = byId.get(vn.version)
-      const tgt = byId.get(versionNodes[i + 1].version)
+      const tgt = byId.get(allVersionNodes[i + 1].version)
       const { sourceHandle, targetHandle } =
         src && tgt
           ? closestPair(src, tgt)
@@ -94,13 +149,13 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
       return {
         id: `e-${i}`,
         source: vn.version,
-        target: versionNodes[i + 1].version,
+        target: allVersionNodes[i + 1].version,
         sourceHandle,
         targetHandle,
         type: "default",
       }
     })
-  }, [nodes, versionNodes])
+  }, [nodes, allVersionNodes])
 
   // Step 2: map each node → which of its handles are in use
   const activeHandlesMap = useMemo(() => {
@@ -131,32 +186,88 @@ export function PromotionGraph({ nodes: versionNodes }: Props) {
     [nodes, activeHandlesMap]
   )
 
-  if (versionNodes.length === 0) {
-    return <p style={{ padding: "2rem", color: "#888" }}>No builds found for this client.</p>
+  if (versionNodes.length === 0 && manualNodes.length === 0) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%" }}>
+        <GraphToolbar onAddNode={() => setShowAddModal(true)} />
+        <p style={{ padding: "2rem", color: "#888" }}>No builds found for this client.</p>
+        {showAddModal && (
+          <AddNodeModal onAdd={handleAddNode} onClose={() => setShowAddModal(false)} />
+        )}
+      </div>
+    )
   }
 
   return (
     <>
-      <div style={{ width: "100%", height: "100vh" }}>
-        <ReactFlow
-          nodes={enrichedNodes}
-          edges={edges}
-          nodeTypes={NODE_TYPES}
-          onNodesChange={onNodesChange}
-          snapToGrid
-          snapGrid={[20, 20]}
-          selectionOnDrag
-          panOnDrag={[1, 2]}
-          panOnScroll
-          multiSelectionKeyCode={["Control", "Meta"]}
-          onSelectionChange={({ nodes: sel }) => { if (sel.length > 1) setSelected(null) }}
-          fitView
-        >
-          <Background />
-          <Controls />
-        </ReactFlow>
+      <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100vh" }}>
+        <GraphToolbar onAddNode={() => setShowAddModal(true)} />
+        <div style={{ flex: 1 }}>
+          <ReactFlow
+            nodes={enrichedNodes}
+            edges={edges}
+            nodeTypes={NODE_TYPES}
+            onNodesChange={onNodesChange}
+            snapToGrid
+            snapGrid={[20, 20]}
+            selectionOnDrag
+            panOnDrag={[1, 2]}
+            panOnScroll
+            multiSelectionKeyCode={["Control", "Meta"]}
+            onSelectionChange={({ nodes: sel }) => { if (sel.length > 1) setSelected(null) }}
+            fitView
+          >
+            <Background />
+            <Controls />
+          </ReactFlow>
+        </div>
       </div>
       <BuildDetailsPanel node={selected} onClose={() => setSelected(null)} />
+      {showAddModal && (
+        <AddNodeModal onAdd={handleAddNode} onClose={() => setShowAddModal(false)} />
+      )}
     </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Toolbar
+// ---------------------------------------------------------------------------
+
+function GraphToolbar({ onAddNode }: { onAddNode: () => void }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.75rem",
+        padding: "0.5rem 1rem",
+        borderBottom: "1px solid #e5e7eb",
+        background: "#f9fafb",
+        flexShrink: 0,
+      }}
+    >
+      <button
+        onClick={onAddNode}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.375rem",
+          padding: "0.4rem 0.875rem",
+          borderRadius: 6,
+          border: "1px solid #d1d5db",
+          background: "#fff",
+          cursor: "pointer",
+          fontSize: "0.875rem",
+          fontWeight: 500,
+          color: "#374151",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = "#f3f4f6" }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "#fff" }}
+      >
+        <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span>
+        Add node
+      </button>
+    </div>
   )
 }

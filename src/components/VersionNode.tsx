@@ -14,6 +14,7 @@ interface Props {
     versionNode: VersionNodeType
     onClick: (node: VersionNodeType) => void
     activeHandles: Set<string>
+    isManual?: boolean
   }
 }
 
@@ -25,7 +26,7 @@ const SIDES = [
 ] as const
 
 export function VersionNodeComponent({ data }: Props) {
-  const { versionNode, onClick, activeHandles } = data
+  const { versionNode, onClick, activeHandles, isManual } = data
   const { version, highestEnv, build } = versionNode
   const color = ENV_COLORS[highestEnv] ?? "#6b7280"
   const [hovered, setHovered] = useState(false)
@@ -45,8 +46,8 @@ export function VersionNodeComponent({ data }: Props) {
       style={{
         padding: "0.75rem 1rem",
         borderRadius: 8,
-        border: `2px solid ${color}`,
-        background: "#fff",
+        border: `2px ${isManual ? "dashed" : "solid"} ${color}`,
+        background: isManual ? "#fafafa" : "#fff",
         cursor: "pointer",
         width: "100%",
         height: "100%",
@@ -70,7 +71,23 @@ export function VersionNodeComponent({ data }: Props) {
         )
       })}
 
-      <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{version}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{version}</div>
+        {isManual && (
+          <span style={{
+            fontSize: "0.65rem",
+            fontWeight: 600,
+            padding: "1px 5px",
+            borderRadius: 3,
+            background: "#e5e7eb",
+            color: "#6b7280",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+          }}>
+            manual
+          </span>
+        )}
+      </div>
       <span
         style={{
           display: "inline-block",
