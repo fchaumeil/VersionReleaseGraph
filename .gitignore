@@ -12,3 +12,5 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Local env — contains secrets, never commit
+.env.local
