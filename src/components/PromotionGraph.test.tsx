@@ -12,6 +12,24 @@ import type { Node, Edge } from "@xyflow/react"
 // Epic 4.7 — Empty state
 
 // ---------------------------------------------------------------------------
+// Mock useManualNodes so tests don't touch Firebase
+// ---------------------------------------------------------------------------
+
+vi.mock("../hooks/useManualNodes", () => ({
+  useManualNodes: () => {
+    const [manualNodes, setManualNodes] = React.useState<VersionNode[]>([])
+    return {
+      manualNodes,
+      addNode: (node: VersionNode) => {
+        setManualNodes((prev) => [...prev, node])
+        return Promise.resolve()
+      },
+      syncing: false,
+    }
+  },
+}))
+
+// ---------------------------------------------------------------------------
 // Capture props passed to ReactFlow so we can assert on nodes/edges
 // ---------------------------------------------------------------------------
 

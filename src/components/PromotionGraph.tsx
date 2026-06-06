@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   ReactFlow,
   Background,
@@ -12,6 +12,7 @@ import * as semver from "semver"
 import { VersionNodeComponent } from "./VersionNode"
 import { BuildDetailsPanel } from "./BuildDetailsPanel"
 import { AddNodeModal } from "./AddNodeModal"
+import { useManualNodes } from "../hooks/useManualNodes"
 import type { VersionNode } from "../lib/types"
 import { ENV_PRIORITY } from "../lib/types"
 
@@ -75,7 +76,6 @@ function mergeNodes(real: VersionNode[], manual: VersionNode[]): VersionNode[] {
     if (!existing) {
       byVersion.set(vn.version, { node: vn, isManual: true })
     } else {
-      // Keep higher env; if manual env is higher, it overrides
       const merged: VersionNode =
         ENV_PRIORITY[vn.highestEnv] > ENV_PRIORITY[existing.node.highestEnv]
           ? { ...vn, allBuilds: [...existing.node.allBuilds, ...vn.allBuilds] }
@@ -95,18 +95,16 @@ function mergeNodes(real: VersionNode[], manual: VersionNode[]): VersionNode[] {
 
 interface Props {
   nodes: VersionNode[]
+  /** When provided, manual nodes are persisted to Firestore under this key */
+  clientId?: string
 }
 
-export function PromotionGraph({ nodes: versionNodes }: Props) {
+export function PromotionGraph({ nodes: versionNodes, clientId }: Props) {
   const [selected, setSelected] = useState<VersionNode | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [manualNodes, setManualNodes] = useState<VersionNode[]>([])
 
-  const handleAddNode = useCallback((newNode: VersionNode) => {
-    setManualNodes((prev) => [...prev, newNode])
-  }, [])
+  const { manualNodes, addNode: handleAddNode } = useManualNodes(clientId ?? "")
 
-  // Set of versions that were added manually (used to mark nodes visually)
   const manualVersions = useMemo(
     () => new Set(manualNodes.map((n) => n.version)),
     [manualNodes]

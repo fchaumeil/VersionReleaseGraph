@@ -27,6 +27,7 @@ No backend. The app is a pure static site.
 - **React Router** — routes: `/` (home), `/client/:id`
 - **React Flow** — graph rendering
 - **semver** — version sorting and validation
+- **Firebase (Firestore)** — persists manually-added graph nodes per client
 
 ---
 
@@ -38,9 +39,19 @@ Stored in `.env.local` (git-ignored):
 VITE_AZURE_DEVOPS_PAT=<personal-access-token-scope:Build-Read>
 VITE_AZURE_DEVOPS_ORG=<organisation-name>
 VITE_AZURE_DEVOPS_PROJECT=<project-name>
+
+# Firebase — required for manual-node persistence
+VITE_FIREBASE_API_KEY=<web-api-key>
+VITE_FIREBASE_AUTH_DOMAIN=<project-id>.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=<project-id>
+VITE_FIREBASE_APP_ID=<app-id>
 ```
 
 The PAT is Base64-encoded at runtime and passed as `Authorization: Basic <base64(:<PAT>)>` on every Azure DevOps request. It is **never** hardcoded in source.
+
+The Firebase API key is safe to expose in client-side code (it is a public identifier, not a secret). Lock down access via **Firestore Security Rules** — for an internal tool the simplest rule is to allow reads/writes only when the request originates from your corporate domain, or to require Firebase Anonymous Auth. Without security rules the database is open to the internet.
+
+If the four `VITE_FIREBASE_*` vars are absent the app still works; manual nodes are stored in component state for the session only (no persistence).
 
 `.env.local` must be listed in `.gitignore`. Never commit it.
 
@@ -69,9 +80,11 @@ The PAT is Base64-encoded at runtime and passed as `Authorization: Basic <base64
     │   ├── VersionNode.tsx      # Custom React Flow node
     │   └── BuildDetailsPanel.tsx
     ├── hooks/
-    │   └── useBuilds.ts         # Fetches + transforms builds
+    │   ├── useBuilds.ts         # Fetches + transforms builds
+    │   └── useManualNodes.ts    # Manual-node state + Firestore sync
     ├── lib/
     │   ├── azureDevOps.ts       # Azure DevOps REST calls
+    │   ├── firebase.ts          # Firestore initialisation (null when unconfigured)
     │   ├── transformBuilds.ts   # Core promotion logic
     │   └── types.ts
     └── config/
