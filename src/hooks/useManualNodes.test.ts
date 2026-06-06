@@ -189,4 +189,61 @@ describe("useManualNodes", () => {
     expect(result.current.syncing).toBe(false)
     expect(result.current.manualNodes).toEqual([])
   })
+
+  // ---------------------------------------------------------------------------
+  // updateNode
+  // ---------------------------------------------------------------------------
+
+  it("updateNode replaces the matching version in the list", async () => {
+    const { result } = renderHook(() => useManualNodes("client-a"))
+    const original = makeNode("1.0.0", "dev")
+    fireSnapshot([original])
+
+    const updated = makeNode("1.0.0", "prod")
+
+    await act(async () => {
+      await result.current.updateNode("1.0.0", updated)
+    })
+
+    expect(result.current.manualNodes).toHaveLength(1)
+    expect(result.current.manualNodes[0].highestEnv).toBe("prod")
+  })
+
+  it("updateNode persists the new list to Firestore", async () => {
+    const { result } = renderHook(() => useManualNodes("client-a"))
+    fireSnapshot([makeNode("1.0.0", "dev")])
+    mockSetDoc.mockClear()
+
+    await act(async () => {
+      await result.current.updateNode("1.0.0", makeNode("1.0.0", "qa"))
+    })
+
+    expect(mockSetDoc).toHaveBeenCalledOnce()
+    const [, payload] = mockSetDoc.mock.calls[0] as [unknown, { nodes: VersionNode[] }]
+    expect(payload.nodes[0].highestEnv).toBe("qa")
+  })
+
+  it("updateNode leaves other nodes unchanged", async () => {
+    const { result } = renderHook(() => useManualNodes("client-a"))
+    fireSnapshot([makeNode("1.0.0", "dev"), makeNode("2.0.0", "qa")])
+
+    await act(async () => {
+      await result.current.updateNode("1.0.0", makeNode("1.0.0", "prod"))
+    })
+
+    expect(result.current.manualNodes).toHaveLength(2)
+    expect(result.current.manualNodes.find(n => n.version === "2.0.0")?.highestEnv).toBe("qa")
+  })
+
+  it("updateNode reverts optimistic update on Firestore write failure", async () => {
+    mockSetDoc.mockRejectedValueOnce(new Error("Write failed"))
+    const { result } = renderHook(() => useManualNodes("client-a"))
+    fireSnapshot([makeNode("1.0.0", "dev")])
+
+    await act(async () => {
+      await result.current.updateNode("1.0.0", makeNode("1.0.0", "prod"))
+    })
+
+    expect(result.current.manualNodes[0].highestEnv).toBe("dev")
+  })
 })

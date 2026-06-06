@@ -157,3 +157,118 @@ describe("BuildDetailsPanel", () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Editable mode (isManual=true)
+// ---------------------------------------------------------------------------
+
+function makeManualNode(overrides: Partial<VersionNode> = {}): VersionNode {
+  const build = {
+    id: "manual-1.0.0-dev",
+    version: "1.0.0",
+    environment: "dev" as const,
+    timestamp: new Date().toISOString(),
+    buildUrl: "https://example.com/build/1",
+    commitSha: "abc1234",
+    tags: ["env:dev"],
+    hasDbChanges: false,
+    hasEnvChanges: false,
+  }
+  return { version: "1.0.0", highestEnv: "dev", build, allBuilds: [build], ...overrides }
+}
+
+describe("BuildDetailsPanel — editable mode (isManual=true)", () => {
+  it("shows the version as a heading", () => {
+    render(<BuildDetailsPanel node={makeManualNode()} isManual onSave={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getByRole("heading", { name: "1.0.0" })).toBeInTheDocument()
+  })
+
+  it("renders an environment select pre-populated with the current env", () => {
+    render(<BuildDetailsPanel node={makeManualNode()} isManual onSave={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getByRole("combobox")).toHaveValue("dev")
+  })
+
+  it("renders a text input for commit SHA pre-populated with current value", () => {
+    render(<BuildDetailsPanel node={makeManualNode()} isManual onSave={vi.fn()} onClose={vi.fn()} />)
+    const inputs = screen.getAllByRole("textbox")
+    const shaInput = inputs.find((i) => (i as HTMLInputElement).value === "abc1234")
+    expect(shaInput).toBeInTheDocument()
+  })
+
+  it("renders a url input for build URL pre-populated with current value", () => {
+    render(<BuildDetailsPanel node={makeManualNode()} isManual onSave={vi.fn()} onClose={vi.fn()} />)
+    const urlInput = screen.getByDisplayValue("https://example.com/build/1")
+    expect(urlInput).toBeInTheDocument()
+  })
+
+  it("renders DB changes checkbox reflecting hasDbChanges=false", () => {
+    render(<BuildDetailsPanel node={makeManualNode()} isManual onSave={vi.fn()} onClose={vi.fn()} />)
+    const checkboxes = screen.getAllByRole("checkbox")
+    expect(checkboxes[0]).not.toBeChecked() // DB changes
+  })
+
+  it("renders Env vars changed checkbox reflecting hasEnvChanges=false", () => {
+    render(<BuildDetailsPanel node={makeManualNode()} isManual onSave={vi.fn()} onClose={vi.fn()} />)
+    const checkboxes = screen.getAllByRole("checkbox")
+    expect(checkboxes[1]).not.toBeChecked() // Env vars changed
+  })
+
+  it("pre-checks DB changes checkbox when hasDbChanges=true", () => {
+    const node = makeManualNode()
+    node.build = { ...node.build, hasDbChanges: true }
+    render(<BuildDetailsPanel node={node} isManual onSave={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getAllByRole("checkbox")[0]).toBeChecked()
+  })
+
+  it("renders a Save changes button", () => {
+    render(<BuildDetailsPanel node={makeManualNode()} isManual onSave={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getByRole("button", { name: /save changes/i })).toBeInTheDocument()
+  })
+
+  it("does not render the tags section in editable mode", () => {
+    render(<BuildDetailsPanel node={makeManualNode()} isManual onSave={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.queryByText(/^tags$/i)).not.toBeInTheDocument()
+  })
+
+  it("calls onSave with updated node on save", async () => {
+    const onSave = vi.fn(() => Promise.resolve())
+    render(<BuildDetailsPanel node={makeManualNode()} isManual onSave={onSave} onClose={vi.fn()} />)
+
+    // Change environment to prod
+    await userEvent.selectOptions(screen.getByRole("combobox"), "prod")
+    await userEvent.click(screen.getByRole("button", { name: /save changes/i }))
+
+    expect(onSave).toHaveBeenCalledOnce()
+    const saved: VersionNode = onSave.mock.calls[0][0]
+    expect(saved.highestEnv).toBe("prod")
+    expect(saved.build.environment).toBe("prod")
+    expect(saved.build.tags).toContain("env:prod")
+  })
+
+  it("includes risk:db in saved tags when DB changes is checked", async () => {
+    const onSave = vi.fn(() => Promise.resolve())
+    render(<BuildDetailsPanel node={makeManualNode()} isManual onSave={onSave} onClose={vi.fn()} />)
+    await userEvent.click(screen.getAllByRole("checkbox")[0]) // DB changes
+    await userEvent.click(screen.getByRole("button", { name: /save changes/i }))
+    const saved: VersionNode = onSave.mock.calls[0][0]
+    expect(saved.build.hasDbChanges).toBe(true)
+    expect(saved.build.tags).toContain("risk:db")
+  })
+
+  it("shows Saving… while the save is in progress", async () => {
+    let resolve: () => void
+    const onSave = vi.fn(() => new Promise<void>((res) => { resolve = res }))
+    render(<BuildDetailsPanel node={makeManualNode()} isManual onSave={onSave} onClose={vi.fn()} />)
+    await userEvent.click(screen.getByRole("button", { name: /save changes/i }))
+    expect(screen.getByRole("button", { name: /saving/i })).toBeInTheDocument()
+    resolve!()
+  })
+
+  it("resets form fields when a different node is opened", () => {
+    const nodeA = makeManualNode()
+    const nodeB = makeManualNode({ version: "2.0.0", highestEnv: "qa", build: { ...makeManualNode().build, environment: "qa", commitSha: "def5678" } })
+    const { rerender } = render(<BuildDetailsPanel node={nodeA} isManual onSave={vi.fn()} onClose={vi.fn()} />)
+    rerender(<BuildDetailsPanel node={nodeB} isManual onSave={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getByRole("combobox")).toHaveValue("qa")
+  })
+})

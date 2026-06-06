@@ -8,6 +8,7 @@ const COLLECTION = "graphs"
 export interface UseManualNodesResult {
   manualNodes: VersionNode[]
   addNode: (node: VersionNode) => Promise<void>
+  updateNode: (version: string, updated: VersionNode) => Promise<void>
   /** true while the initial Firestore snapshot is in flight */
   syncing: boolean
 }
@@ -37,15 +38,9 @@ export function useManualNodes(clientId: string): UseManualNodesResult {
     return unsubscribe
   }, [clientId])
 
-  const addNode = useCallback(
-    async (node: VersionNode) => {
-      const next = [...manualNodes, node]
-
-      // Optimistic update — UI reflects the change immediately
-      setManualNodes(next)
-
+  const persist = useCallback(
+    async (next: VersionNode[], previous: VersionNode[]) => {
       if (!db || !clientId) return
-
       try {
         await setDoc(
           doc(db, COLLECTION, clientId),
@@ -54,12 +49,29 @@ export function useManualNodes(clientId: string): UseManualNodesResult {
         )
       } catch (err) {
         console.error("[useManualNodes] Firestore write failed:", err)
-        // Revert to pre-add state on failure
-        setManualNodes(manualNodes)
+        setManualNodes(previous)
       }
     },
-    [clientId, manualNodes]
+    [clientId]
   )
 
-  return { manualNodes, addNode, syncing }
+  const addNode = useCallback(
+    async (node: VersionNode) => {
+      const next = [...manualNodes, node]
+      setManualNodes(next)
+      await persist(next, manualNodes)
+    },
+    [manualNodes, persist]
+  )
+
+  const updateNode = useCallback(
+    async (version: string, updated: VersionNode) => {
+      const next = manualNodes.map((n) => (n.version === version ? updated : n))
+      setManualNodes(next)
+      await persist(next, manualNodes)
+    },
+    [manualNodes, persist]
+  )
+
+  return { manualNodes, addNode, updateNode, syncing }
 }

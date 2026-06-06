@@ -103,7 +103,7 @@ export function PromotionGraph({ nodes: versionNodes, clientId }: Props) {
   const [selected, setSelected] = useState<VersionNode | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
 
-  const { manualNodes, addNode: handleAddNode } = useManualNodes(clientId ?? "")
+  const { manualNodes, addNode: handleAddNode, updateNode } = useManualNodes(clientId ?? "")
 
   const manualVersions = useMemo(
     () => new Set(manualNodes.map((n) => n.version)),
@@ -223,7 +223,12 @@ export function PromotionGraph({ nodes: versionNodes, clientId }: Props) {
           </ReactFlow>
         </div>
       </div>
-      <BuildDetailsPanel node={selected} onClose={() => setSelected(null)} />
+      <BuildDetailsPanel
+        node={selected}
+        isManual={selected ? manualVersions.has(selected.version) : false}
+        onSave={async (updated) => { await updateNode(updated.version, updated); setSelected(updated) }}
+        onClose={() => setSelected(null)}
+      />
       {showAddModal && (
         <AddNodeModal onAdd={handleAddNode} onClose={() => setShowAddModal(false)} />
       )}
