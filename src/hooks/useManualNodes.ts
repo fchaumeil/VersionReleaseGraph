@@ -5,16 +5,22 @@ import type { VersionNode } from "../lib/types"
 
 const COLLECTION = "graphs"
 
+export type NodePositions = Record<string, { x: number; y: number }>
+
 export interface UseManualNodesResult {
   manualNodes: VersionNode[]
   addNode: (node: VersionNode) => Promise<void>
   updateNode: (version: string, updated: VersionNode) => Promise<void>
+  positions: NodePositions
+  savePositions: (positions: NodePositions) => Promise<void>
+  isPersisted: boolean
   /** true while the initial Firestore snapshot is in flight */
   syncing: boolean
 }
 
 export function useManualNodes(clientId: string): UseManualNodesResult {
   const [manualNodes, setManualNodes] = useState<VersionNode[]>([])
+  const [positions, setPositions] = useState<NodePositions>({})
   const [syncing, setSyncing] = useState(!!(db && clientId))
 
   useEffect(() => {
@@ -27,7 +33,13 @@ export function useManualNodes(clientId: string): UseManualNodesResult {
     const unsubscribe = onSnapshot(
       ref,
       (snap) => {
-        setManualNodes(snap.exists() ? ((snap.data().nodes as VersionNode[]) ?? []) : [])
+        if (snap.exists()) {
+          setManualNodes((snap.data().nodes as VersionNode[]) ?? [])
+          setPositions((snap.data().positions as NodePositions) ?? {})
+        } else {
+          setManualNodes([])
+          setPositions({})
+        }
         setSyncing(false)
       },
       (err) => {
@@ -55,6 +67,18 @@ export function useManualNodes(clientId: string): UseManualNodesResult {
     [clientId]
   )
 
+  const savePositions = useCallback(
+    async (next: NodePositions) => {
+      if (!db || !clientId) return
+      await setDoc(
+        doc(db, COLLECTION, clientId),
+        { positions: next, updatedAt: serverTimestamp() },
+        { merge: true }
+      )
+    },
+    [clientId]
+  )
+
   const addNode = useCallback(
     async (node: VersionNode) => {
       const next = [...manualNodes, node]
@@ -73,5 +97,13 @@ export function useManualNodes(clientId: string): UseManualNodesResult {
     [manualNodes, persist]
   )
 
-  return { manualNodes, addNode, updateNode, syncing }
+  return {
+    manualNodes,
+    addNode,
+    updateNode,
+    positions,
+    savePositions,
+    isPersisted: !!(db && clientId),
+    syncing,
+  }
 }
