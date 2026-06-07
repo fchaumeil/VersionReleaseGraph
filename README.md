@@ -41,13 +41,15 @@ npm install
 
 ### 2. Configure environment variables
 
-Create a `.env.local` file in the project root (this file is git-ignored and must never be committed):
+A template is provided — copy it and fill in your values:
 
+```bash
+cp .env.local.example .env.local
 ```
-VITE_AZURE_DEVOPS_PAT=<your-personal-access-token>
-VITE_AZURE_DEVOPS_ORG=<your-organisation-name>
-VITE_AZURE_DEVOPS_PROJECT=<your-project-name>
-```
+
+`.env.local` is git-ignored and must never be committed.
+
+#### Azure DevOps variables
 
 | Variable | Description |
 |---|---|
@@ -55,9 +57,27 @@ VITE_AZURE_DEVOPS_PROJECT=<your-project-name>
 | `VITE_AZURE_DEVOPS_ORG` | Azure DevOps organisation name (e.g. `mycompany`) |
 | `VITE_AZURE_DEVOPS_PROJECT` | Azure DevOps project name (e.g. `MyProject`) |
 
-The PAT is Base64-encoded at runtime and sent as `Authorization: Basic <base64(:<PAT>)>`. It is never hardcoded in source.
+Create a PAT at `https://dev.azure.com/<your-org>/_usersSettings/tokens`. Scope it to **Build → Read** only. The PAT is Base64-encoded at runtime and sent as `Authorization: Basic <base64(:<PAT>)>` — it is never hardcoded in source.
 
 > **Security note:** Because there is no backend, the PAT is visible to any user who opens DevTools. Deploy this tool only on private/internal networks and scope the PAT to **Build (Read)** only.
+
+#### Firebase / Firestore variables (optional — persistent manual nodes)
+
+Without these variables the app still works: manual nodes are kept in component state for the current browser session but are not saved between sessions.
+
+To enable persistence:
+
+1. Go to [console.firebase.google.com](https://console.firebase.google.com) and create a new project.
+2. Click **Add app → Web**, register the app, and copy the `firebaseConfig` values into `.env.local`.
+3. In the left sidebar go to **Build → Firestore Database**, click **Create database**, choose a region, and start in **production mode**.
+4. Open the **Rules** tab and restrict access appropriately (see the comments in `.env.local.example` for a starter rule). Without custom rules the database is open to the internet.
+
+| Variable | Description |
+|---|---|
+| `VITE_FIREBASE_API_KEY` | Web API key (public client identifier, not a secret) |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `<project-id>.firebaseapp.com` |
+| `VITE_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `VITE_FIREBASE_APP_ID` | Firebase app ID |
 
 ### 3. Configure clients
 
