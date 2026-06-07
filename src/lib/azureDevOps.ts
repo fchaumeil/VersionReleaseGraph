@@ -1,14 +1,20 @@
 import { MOCK_PIPELINE_MAP } from "./mockData"
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA === "true"
+const PAT = import.meta.env.VITE_AZURE_DEVOPS_PAT as string | undefined
+const PLACEHOLDER = "your-personal-access-token-here"
+
+// Fall back to mock data when explicitly requested, or when no real PAT is configured
+const USE_MOCK =
+  import.meta.env.VITE_USE_MOCK_DATA === "true" ||
+  !PAT ||
+  PAT === PLACEHOLDER
 
 const ORG = import.meta.env.VITE_AZURE_DEVOPS_ORG
 const PROJECT = import.meta.env.VITE_AZURE_DEVOPS_PROJECT
 const BASE = `https://dev.azure.com/${ORG}/${PROJECT}/_apis`
 
 function authHeader(): string {
-  const pat = import.meta.env.VITE_AZURE_DEVOPS_PAT
-  return "Basic " + btoa(":" + pat)
+  return "Basic " + btoa(":" + PAT)
 }
 
 async function apiFetch<T>(url: string): Promise<T> {
@@ -16,6 +22,16 @@ async function apiFetch<T>(url: string): Promise<T> {
     headers: { Authorization: authHeader() },
   })
   if (!res.ok) throw new Error(`Azure DevOps API error: ${res.status} ${res.statusText}`)
+
+  const contentType = res.headers.get("content-type") ?? ""
+  if (!contentType.includes("application/json")) {
+    // Azure DevOps returns an HTML login page when auth fails on some endpoints
+    throw new Error(
+      `Azure DevOps returned HTML instead of JSON — check that VITE_AZURE_DEVOPS_PAT, ` +
+      `VITE_AZURE_DEVOPS_ORG, and VITE_AZURE_DEVOPS_PROJECT are set correctly in .env.local`
+    )
+  }
+
   return res.json() as Promise<T>
 }
 
