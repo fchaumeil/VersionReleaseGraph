@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import {
   ReactFlow,
   Background,
@@ -12,7 +12,7 @@ import * as semver from "semver"
 import { VersionNodeComponent } from "./VersionNode"
 import { BuildDetailsPanel } from "./BuildDetailsPanel"
 import { AddNodeModal } from "./AddNodeModal"
-import { useManualNodes } from "../hooks/useManualNodes"
+import { useManualNodes, type NodePositions } from "../hooks/useManualNodes"
 import { useAdoStatus, type AdoStatus } from "../hooks/useAdoStatus"
 import type { VersionNode } from "../lib/types"
 import { ENV_PRIORITY } from "../lib/types"
@@ -96,15 +96,24 @@ function mergeNodes(real: VersionNode[], manual: VersionNode[]): VersionNode[] {
 
 interface Props {
   nodes: VersionNode[]
-  /** When provided, manual nodes are persisted to Firestore under this key */
+  /** When provided, manual nodes and layout are persisted to Firestore under this key */
   clientId?: string
 }
 
 export function PromotionGraph({ nodes: versionNodes, clientId }: Props) {
   const [selected, setSelected] = useState<VersionNode | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
-  const { manualNodes, addNode: handleAddNode, updateNode } = useManualNodes(clientId ?? "")
+  const {
+    manualNodes,
+    addNode: handleAddNode,
+    updateNode,
+    positions,
+    savePositions,
+    isPersisted,
+  } = useManualNodes(clientId ?? "")
 
   const manualVersions = useMemo(
     () => new Set(manualNodes.map((n) => n.version)),
@@ -121,7 +130,7 @@ export function PromotionGraph({ nodes: versionNodes, clientId }: Props) {
       allVersionNodes.map((vn, i) => ({
         id: vn.version,
         type: "versionNode",
-        position: { x: X_CENTER - NODE_WIDTH / 2, y: i * (NODE_HEIGHT + 40) },
+        position: positions[vn.version] ?? { x: X_CENTER - NODE_WIDTH / 2, y: i * (NODE_HEIGHT + 40) },
         data: {
           versionNode: vn,
           onClick: setSelected,
@@ -130,13 +139,16 @@ export function PromotionGraph({ nodes: versionNodes, clientId }: Props) {
         },
         style: { width: NODE_WIDTH, height: NODE_HEIGHT },
       })),
-    [allVersionNodes, manualVersions]
+    [allVersionNodes, manualVersions, positions]
   )
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
 
-  // Sync ReactFlow node list whenever the source version data changes
-  useEffect(() => { setNodes(initialNodes) }, [allVersionNodes]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Sync ReactFlow node list whenever source data or saved positions change
+  useEffect(() => {
+    setNodes(initialNodes)
+    setIsDirty(false)
+  }, [initialNodes]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Step 1: compute edges + which handles they use
   const edges: Edge[] = useMemo(() => {
@@ -188,10 +200,30 @@ export function PromotionGraph({ nodes: versionNodes, clientId }: Props) {
     [nodes, activeHandlesMap]
   )
 
+  const handleSaveLayout = useCallback(async () => {
+    setIsSaving(true)
+    try {
+      const posMap: NodePositions = {}
+      for (const n of nodes) posMap[n.id] = n.position
+      await savePositions(posMap)
+      setIsDirty(false)
+    } catch (err) {
+      console.error("[PromotionGraph] Failed to save layout:", err)
+    } finally {
+      setIsSaving(false)
+    }
+  }, [nodes, savePositions])
+
   if (versionNodes.length === 0 && manualNodes.length === 0) {
     return (
       <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%" }}>
-        <GraphToolbar onAddNode={() => setShowAddModal(true)} />
+        <GraphToolbar
+          onAddNode={() => setShowAddModal(true)}
+          onSaveLayout={handleSaveLayout}
+          isDirty={isDirty}
+          isSaving={isSaving}
+          isPersisted={isPersisted}
+        />
         <p style={{ padding: "2rem", color: "#888" }}>No builds found for this client.</p>
         {showAddModal && (
           <AddNodeModal onAdd={handleAddNode} onClose={() => setShowAddModal(false)} />
@@ -203,13 +235,20 @@ export function PromotionGraph({ nodes: versionNodes, clientId }: Props) {
   return (
     <>
       <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100vh" }}>
-        <GraphToolbar onAddNode={() => setShowAddModal(true)} />
+        <GraphToolbar
+          onAddNode={() => setShowAddModal(true)}
+          onSaveLayout={handleSaveLayout}
+          isDirty={isDirty}
+          isSaving={isSaving}
+          isPersisted={isPersisted}
+        />
         <div style={{ flex: 1 }}>
           <ReactFlow
             nodes={enrichedNodes}
             edges={edges}
             nodeTypes={NODE_TYPES}
             onNodesChange={onNodesChange}
+            onNodeDragStop={() => setIsDirty(true)}
             snapToGrid
             snapGrid={[20, 20]}
             selectionOnDrag
@@ -241,8 +280,17 @@ export function PromotionGraph({ nodes: versionNodes, clientId }: Props) {
 // Toolbar
 // ---------------------------------------------------------------------------
 
-function GraphToolbar({ onAddNode }: { onAddNode: () => void }) {
+interface GraphToolbarProps {
+  onAddNode: () => void
+  onSaveLayout: () => void
+  isDirty: boolean
+  isSaving: boolean
+  isPersisted: boolean
+}
+
+function GraphToolbar({ onAddNode, onSaveLayout, isDirty, isSaving, isPersisted }: GraphToolbarProps) {
   const adoStatus = useAdoStatus()
+  const saveDisabled = !isPersisted || isSaving || !isDirty
 
   return (
     <div
@@ -276,6 +324,41 @@ function GraphToolbar({ onAddNode }: { onAddNode: () => void }) {
       >
         <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span>
         Add node
+      </button>
+
+      <button
+        onClick={onSaveLayout}
+        disabled={saveDisabled}
+        title={
+          !isPersisted
+            ? "Firebase not configured — positions are session-only"
+            : !isDirty
+            ? "No layout changes to save"
+            : undefined
+        }
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.375rem",
+          padding: "0.4rem 0.875rem",
+          borderRadius: 6,
+          border: "1px solid #d1d5db",
+          background: isDirty && isPersisted ? "#fff" : "#f9fafb",
+          cursor: saveDisabled ? "default" : "pointer",
+          fontSize: "0.875rem",
+          fontWeight: 500,
+          color: saveDisabled ? "#9ca3af" : "#374151",
+          opacity: saveDisabled ? 0.6 : 1,
+          transition: "opacity 0.15s",
+        }}
+        onMouseEnter={(e) => {
+          if (!saveDisabled) e.currentTarget.style.background = "#f3f4f6"
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = isDirty && isPersisted ? "#fff" : "#f9fafb"
+        }}
+      >
+        {isSaving ? "Saving…" : "Save layout"}
       </button>
 
       <div style={{ marginLeft: "auto" }}>

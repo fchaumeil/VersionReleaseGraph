@@ -70,7 +70,20 @@ To enable persistence:
 1. Go to [console.firebase.google.com](https://console.firebase.google.com) and create a new project.
 2. Click **Add app → Web**, register the app, and copy the `firebaseConfig` values into `.env.local`.
 3. In the left sidebar go to **Build → Firestore Database**, click **Create database**, choose a region, and start in **production mode**.
-4. Open the **Rules** tab and restrict access appropriately (see the comments in `.env.local.example` for a starter rule). Without custom rules the database is open to the internet.
+4. Open the **Rules** tab and replace the default rules with:
+
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /graphs/{clientId} {
+         allow read, write: if true;
+       }
+     }
+   }
+   ```
+
+   This app has no Firebase Auth layer, so rules must permit unauthenticated access. The rule above limits open access to the `graphs` collection only — everything else in the database stays locked. Deploy on a private/internal network to limit exposure (the same tradeoff already accepted for the Azure PAT).
 
 | Variable | Description |
 |---|---|
