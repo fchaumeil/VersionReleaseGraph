@@ -22,7 +22,7 @@ export function ClientPage() {
         {error && (
           <p style={{ padding: "2rem", color: "#dc2626" }}>Error: {error}</p>
         )}
-        {!loading && !error && <PromotionGraph nodes={nodes} />}
+        {!loading && !error && <PromotionGraph nodes={nodes} clientId={id} />}
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 import React from "react"
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, act } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { PromotionGraph } from "./PromotionGraph"
 import type { VersionNode } from "../lib/types"
 import type { Node, Edge } from "@xyflow/react"
@@ -9,6 +10,32 @@ import type { Node, Edge } from "@xyflow/react"
 // Epic 4.5 — Straight edges connecting nodes top-to-bottom
 // Epic 4.6 — Scroll support (delegated to React Flow)
 // Epic 4.7 — Empty state
+
+// ---------------------------------------------------------------------------
+// Mock useAdoStatus so tests don't fire real network checks
+// ---------------------------------------------------------------------------
+
+vi.mock("../hooks/useAdoStatus", () => ({
+  useAdoStatus: () => "mock" as const,
+}))
+
+// ---------------------------------------------------------------------------
+// Mock useManualNodes so tests don't touch Firebase
+// ---------------------------------------------------------------------------
+
+vi.mock("../hooks/useManualNodes", () => ({
+  useManualNodes: () => {
+    const [manualNodes, setManualNodes] = React.useState<VersionNode[]>([])
+    return {
+      manualNodes,
+      addNode: (node: VersionNode) => {
+        setManualNodes((prev) => [...prev, node])
+        return Promise.resolve()
+      },
+      syncing: false,
+    }
+  },
+}))
 
 // ---------------------------------------------------------------------------
 // Capture props passed to ReactFlow so we can assert on nodes/edges
@@ -140,5 +167,121 @@ describe("PromotionGraph", () => {
     const clickCallback = capturedProps.nodes[0].data.onClick as (n: VersionNode) => void
     act(() => clickCallback(THREE_NODES[0]))
     expect(screen.getByText("1.0.0")).toBeInTheDocument()
+  })
+
+  // ---------------------------------------------------------------------------
+  // Toolbar
+  // ---------------------------------------------------------------------------
+
+  it("renders an 'Add node' toolbar button when nodes are provided", () => {
+    render(<PromotionGraph nodes={THREE_NODES} />)
+    expect(screen.getByRole("button", { name: /add node/i })).toBeInTheDocument()
+  })
+
+  it("renders an 'Add node' toolbar button in the empty state", () => {
+    render(<PromotionGraph nodes={[]} />)
+    expect(screen.getByRole("button", { name: /add node/i })).toBeInTheDocument()
+  })
+
+  it("opens the AddNodeModal when the toolbar button is clicked", async () => {
+    render(<PromotionGraph nodes={THREE_NODES} />)
+    await userEvent.click(screen.getByRole("button", { name: /add node/i }))
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
+  })
+
+  it("closes the AddNodeModal when Cancel is clicked", async () => {
+    render(<PromotionGraph nodes={THREE_NODES} />)
+    await userEvent.click(screen.getByRole("button", { name: /add node/i }))
+    await userEvent.click(screen.getByRole("button", { name: /cancel/i }))
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
+  // ---------------------------------------------------------------------------
+  // Manual node addition
+  // ---------------------------------------------------------------------------
+
+  it("adds a new node to the graph after a valid modal submission", async () => {
+    render(<PromotionGraph nodes={THREE_NODES} />)
+    expect(capturedProps.nodes).toHaveLength(3)
+
+    await userEvent.click(screen.getByRole("button", { name: /add node/i }))
+    await userEvent.type(screen.getByPlaceholderText(/e\.g\. 1\.2\.3/i), "2.0.0")
+    await userEvent.click(screen.getByRole("button", { name: "Add node" }))
+
+    expect(capturedProps.nodes).toHaveLength(4)
+    expect(capturedProps.nodes.some((n) => n.id === "2.0.0")).toBe(true)
+  })
+
+  it("inserts the new node in semver order", async () => {
+    render(<PromotionGraph nodes={THREE_NODES} />)
+
+    await userEvent.click(screen.getByRole("button", { name: /add node/i }))
+    await userEvent.type(screen.getByPlaceholderText(/e\.g\. 1\.2\.3/i), "1.1.5")
+    await userEvent.click(screen.getByRole("button", { name: "Add node" }))
+
+    const ids = capturedProps.nodes.map((n) => n.id)
+    expect(ids).toEqual(["1.0.0", "1.1.0", "1.1.5", "1.2.0"])
+  })
+
+  it("marks a newly added node with isManual=true", async () => {
+    render(<PromotionGraph nodes={THREE_NODES} />)
+
+    await userEvent.click(screen.getByRole("button", { name: /add node/i }))
+    await userEvent.type(screen.getByPlaceholderText(/e\.g\. 1\.2\.3/i), "2.0.0")
+    await userEvent.click(screen.getByRole("button", { name: "Add node" }))
+
+    const added = capturedProps.nodes.find((n) => n.id === "2.0.0")
+    expect(added?.data.isManual).toBe(true)
+  })
+
+  it("does not mark original nodes as manual", async () => {
+    render(<PromotionGraph nodes={THREE_NODES} />)
+
+    await userEvent.click(screen.getByRole("button", { name: /add node/i }))
+    await userEvent.type(screen.getByPlaceholderText(/e\.g\. 1\.2\.3/i), "2.0.0")
+    await userEvent.click(screen.getByRole("button", { name: "Add node" }))
+
+    const original = capturedProps.nodes.find((n) => n.id === "1.0.0")
+    expect(original?.data.isManual).toBeFalsy()
+  })
+
+  it("merges manual node into existing version when its env is higher", async () => {
+    // 1.2.0 is currently dev; adding it as prod should upgrade it
+    render(<PromotionGraph nodes={THREE_NODES} />)
+
+    await userEvent.click(screen.getByRole("button", { name: /add node/i }))
+    await userEvent.type(screen.getByPlaceholderText(/e\.g\. 1\.2\.3/i), "1.2.0")
+    await userEvent.selectOptions(screen.getByRole("combobox"), "prod")
+    await userEvent.click(screen.getByRole("button", { name: "Add node" }))
+
+    // Still 3 nodes (no duplicate)
+    expect(capturedProps.nodes).toHaveLength(3)
+    const merged = capturedProps.nodes.find((n) => n.id === "1.2.0")
+    expect((merged?.data.versionNode as VersionNode).highestEnv).toBe("prod")
+  })
+
+  it("keeps existing node when manual env is lower", async () => {
+    // 1.0.0 is prod; adding it as dev should keep it as prod
+    render(<PromotionGraph nodes={THREE_NODES} />)
+
+    await userEvent.click(screen.getByRole("button", { name: /add node/i }))
+    await userEvent.type(screen.getByPlaceholderText(/e\.g\. 1\.2\.3/i), "1.0.0")
+    // default env is dev
+    await userEvent.click(screen.getByRole("button", { name: "Add node" }))
+
+    expect(capturedProps.nodes).toHaveLength(3)
+    const node = capturedProps.nodes.find((n) => n.id === "1.0.0")
+    expect((node?.data.versionNode as VersionNode).highestEnv).toBe("prod")
+  })
+
+  it("shows ReactFlow after adding a node from the empty state", async () => {
+    render(<PromotionGraph nodes={[]} />)
+    expect(screen.queryByTestId("react-flow")).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole("button", { name: /add node/i }))
+    await userEvent.type(screen.getByPlaceholderText(/e\.g\. 1\.2\.3/i), "1.0.0")
+    await userEvent.click(screen.getByRole("button", { name: "Add node" }))
+
+    expect(screen.getByTestId("react-flow")).toBeInTheDocument()
   })
 })

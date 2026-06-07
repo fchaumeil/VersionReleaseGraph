@@ -37,9 +37,9 @@ function makeNode(overrides: Partial<VersionNode["build"]> = {}): VersionNode {
   }
 }
 
-function renderNode(node: VersionNode, onClick = vi.fn()) {
+function renderNode(node: VersionNode, onClick = vi.fn(), isManual?: boolean) {
   return render(
-    <VersionNodeComponent data={{ versionNode: node, onClick, activeHandles: new Set<string>() }} />
+    <VersionNodeComponent data={{ versionNode: node, onClick, activeHandles: new Set<string>(), isManual }} />
   )
 }
 
@@ -109,5 +109,33 @@ describe("VersionNodeComponent", () => {
     await userEvent.click(screen.getByText("1.2.3"))
     expect(onClick).toHaveBeenCalledOnce()
     expect(onClick).toHaveBeenCalledWith(node)
+  })
+
+  // isManual visual treatment
+  it("uses solid border when isManual is false", () => {
+    const { container } = renderNode(makeNode(), vi.fn(), false)
+    const wrapper = container.firstChild as HTMLElement
+    expect(wrapper.style.border).toContain("solid")
+  })
+
+  it("uses dashed border when isManual is true", () => {
+    const { container } = renderNode(makeNode(), vi.fn(), true)
+    const wrapper = container.firstChild as HTMLElement
+    expect(wrapper.style.border).toContain("dashed")
+  })
+
+  it("shows 'manual' badge when isManual is true", () => {
+    renderNode(makeNode(), vi.fn(), true)
+    expect(screen.getByText(/manual/i)).toBeInTheDocument()
+  })
+
+  it("does not show 'manual' badge when isManual is not set", () => {
+    renderNode(makeNode())
+    expect(screen.queryByText(/^manual$/i)).not.toBeInTheDocument()
+  })
+
+  it("does not show 'manual' badge when isManual is false", () => {
+    renderNode(makeNode(), vi.fn(), false)
+    expect(screen.queryByText(/^manual$/i)).not.toBeInTheDocument()
   })
 })
