@@ -13,6 +13,7 @@ import { VersionNodeComponent } from "./VersionNode"
 import { BuildDetailsPanel } from "./BuildDetailsPanel"
 import { AddNodeModal } from "./AddNodeModal"
 import { useManualNodes } from "../hooks/useManualNodes"
+import { useAdoStatus, type AdoStatus } from "../hooks/useAdoStatus"
 import type { VersionNode } from "../lib/types"
 import { ENV_PRIORITY } from "../lib/types"
 
@@ -241,6 +242,8 @@ export function PromotionGraph({ nodes: versionNodes, clientId }: Props) {
 // ---------------------------------------------------------------------------
 
 function GraphToolbar({ onAddNode }: { onAddNode: () => void }) {
+  const adoStatus = useAdoStatus()
+
   return (
     <div
       style={{
@@ -274,6 +277,48 @@ function GraphToolbar({ onAddNode }: { onAddNode: () => void }) {
         <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span>
         Add node
       </button>
+
+      <div style={{ marginLeft: "auto" }}>
+        <AdoStatusIndicator status={adoStatus} />
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// ADO connection status indicator
+// ---------------------------------------------------------------------------
+
+const STATUS_CONFIG: Record<AdoStatus, { color: string; label: string }> = {
+  mock:      { color: "#f59e0b", label: "Mock data"       },
+  checking:  { color: "#9ca3af", label: "Checking…"       },
+  connected: { color: "#22c55e", label: "ADO connected"   },
+  error:     { color: "#ef4444", label: "ADO unreachable" },
+}
+
+function AdoStatusIndicator({ status }: { status: AdoStatus }) {
+  const { color, label } = STATUS_CONFIG[status]
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        fontSize: "0.8rem",
+        color: "#6b7280",
+      }}
+    >
+      <div
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: color,
+          flexShrink: 0,
+          boxShadow: status === "connected" ? `0 0 0 2px ${color}33` : "none",
+        }}
+      />
+      {label}
     </div>
   )
 }

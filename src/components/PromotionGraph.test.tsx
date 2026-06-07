@@ -12,6 +12,14 @@ import type { Node, Edge } from "@xyflow/react"
 // Epic 4.7 — Empty state
 
 // ---------------------------------------------------------------------------
+// Mock useAdoStatus so tests don't fire real network checks
+// ---------------------------------------------------------------------------
+
+vi.mock("../hooks/useAdoStatus", () => ({
+  useAdoStatus: () => "mock" as const,
+}))
+
+// ---------------------------------------------------------------------------
 // Mock useManualNodes so tests don't touch Firebase
 // ---------------------------------------------------------------------------
 

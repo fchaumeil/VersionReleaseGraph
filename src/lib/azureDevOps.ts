@@ -35,6 +35,21 @@ async function apiFetch<T>(url: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
+// Exposed so the status hook can read mode without re-evaluating env vars
+export const isMockMode = USE_MOCK
+
+export async function checkAdoConnection(): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${BASE}/build/builds?$top=1&api-version=7.1`,
+      { headers: { Authorization: authHeader() } }
+    )
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 export interface AzureBuild {
   id: number
   buildNumber: string
