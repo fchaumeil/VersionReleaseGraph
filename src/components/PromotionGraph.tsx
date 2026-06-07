@@ -14,6 +14,7 @@ import { BuildDetailsPanel } from "./BuildDetailsPanel"
 import { AddNodeModal } from "./AddNodeModal"
 import { useManualNodes } from "../hooks/useManualNodes"
 import { useAdoStatus, type AdoStatus } from "../hooks/useAdoStatus"
+import { isFirestoreConfigured } from "../lib/firebase"
 import type { VersionNode } from "../lib/types"
 import { ENV_PRIORITY } from "../lib/types"
 
@@ -278,7 +279,8 @@ function GraphToolbar({ onAddNode }: { onAddNode: () => void }) {
         Add node
       </button>
 
-      <div style={{ marginLeft: "auto" }}>
+      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "1rem" }}>
+        <FirestoreStatusIndicator configured={isFirestoreConfigured} />
         <AdoStatusIndicator status={adoStatus} />
       </div>
     </div>
@@ -316,6 +318,38 @@ function AdoStatusIndicator({ status }: { status: AdoStatus }) {
           background: color,
           flexShrink: 0,
           boxShadow: status === "connected" ? `0 0 0 2px ${color}33` : "none",
+        }}
+      />
+      {label}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Firestore persistence status indicator
+// ---------------------------------------------------------------------------
+
+function FirestoreStatusIndicator({ configured }: { configured: boolean }) {
+  const color = configured ? "#22c55e" : "#f59e0b"
+  const label = configured ? "Firestore ready" : "Firestore off"
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        fontSize: "0.8rem",
+        color: "#6b7280",
+      }}
+    >
+      <div
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: color,
+          flexShrink: 0,
+          boxShadow: configured ? `0 0 0 2px ${color}33` : "none",
         }}
       />
       {label}
